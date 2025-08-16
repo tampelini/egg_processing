@@ -76,7 +76,7 @@ def verificar_predominio_cinza(imagem_cv):
 
 def processar_imagem(imagem):
     """Processa uma imagem detectando ovos, extraindo a média de cor em área elíptica, e anotando visualmente."""
-    fator_elipse = 0.7  # Proporção do semi-eixo para a máscara elíptica
+    fator_elipse = 0.8  # Proporção do semi-eixo para a máscara elíptica
 
     # 1. Carregar e preparar imagem
     imagem_pil = Image.open(imagem).convert("RGB")
