@@ -8,3 +8,5 @@ colour-science
 scikit-image~=0.25.2
 ultralytics~=8.3.167
 pillow_heif~=1.0.0
+gunicorn
+opencv-python-headless
