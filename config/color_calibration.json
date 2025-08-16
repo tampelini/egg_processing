@@ -1,0 +1,47 @@
+{
+  "matrix_3x4": [
+    [
+      0.999396562576294,
+      0.0,
+      0.0,
+      0.06304837018251419
+    ],
+    [
+      0.0,
+      1.000152826309204,
+      0.0,
+      -0.04788804054260254
+    ],
+    [
+      0.0,
+      0.0,
+      1.000266194343567,
+      -0.04243101179599762
+    ]
+  ],
+  "meta": {
+    "image_used": "Converted_File.jpg",
+    "chart_layout": "12x2",
+    "aruco_expected_ids": {
+      "TL": 10,
+      "TR": 11,
+      "BL": 12,
+      "BR": 13
+    },
+    "created_at": "2025-08-16T00:25:52",
+    "warp_size": [
+      800,
+      1600
+    ],
+    "margins_gap": [
+      0.14,
+      0.05,
+      0.06,
+      0.02
+    ],
+    "sample_win": 34,
+    "ref_colors_csv": "C:\\Users\\tampe\\Desktop\\egg_processing\\config\\ref_colors.csv",
+    "measured_csv": "C:\\Users\\tampe\\Desktop\\egg_processing\\config\\measured_Converted_File.csv",
+    "centers_source": "parametric_grid"
+  }
+}

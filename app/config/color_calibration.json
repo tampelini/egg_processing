@@ -1,0 +1,47 @@
+{
+  "matrix_3x4": [
+    [
+      1.0249015092849731,
+      0.0,
+      0.0,
+      -2.0376784801483154
+    ],
+    [
+      0.0,
+      1.020355463027954,
+      0.0,
+      -1.787176251411438
+    ],
+    [
+      0.0,
+      0.0,
+      1.004663109779358,
+      -0.9442846179008484
+    ]
+  ],
+  "meta": {
+    "image_used": "Converted_File.jpg",
+    "chart_layout": "12x2",
+    "aruco_expected_ids": {
+      "TL": 10,
+      "TR": 11,
+      "BL": 12,
+      "BR": 13
+    },
+    "created_at": "2025-08-10T02:56:45",
+    "warp_size": [
+      800,
+      1600
+    ],
+    "margins_gap": [
+      0.14,
+      0.05,
+      0.06,
+      0.02
+    ],
+    "sample_win": 34,
+    "ref_colors_csv": "C:\\Users\\tampe\\Desktop\\flask_sever_egg\\app\\config\\ref_colors.csv",
+    "measured_csv": "C:\\Users\\tampe\\Desktop\\flask_sever_egg\\app\\config\\measured_Converted_File.csv",
+    "centers_source": "parametric_grid"
+  }
+}

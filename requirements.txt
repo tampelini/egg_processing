@@ -1,0 +1,10 @@
+flask~=3.1.1
+opencv-python~=4.12.0.88
+numpy~=2.2.6
+Pillow~=11.3.0
+pillow-heif
+pytest~=8.4.1
+colour-science
+scikit-image~=0.25.2
+ultralytics~=8.3.167
+pillow_heif~=1.0.0

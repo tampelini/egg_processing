@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Egg Processing & Calibração</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+  <h1>Processamento & Calibração</h1>
+  <p class="sub">Escolha entre processar a imagem dos ovos (pipeline do <code>processamento.py</code>) ou calibrar via ColorChecker.</p>
+
+  <div class="grid">
+
+    <!-- OPÇÃO 1: PROCESSAR OVOS -->
+    <section class="section">
+      <h2>1) Processar ovos (processamento.py)</h2>
+      <p class="hint">
+        Envie a imagem dos ovos para segmentação, anotação e cálculo de cores. Este formulário posta para a rota
+        <strong>"/"</strong> (função <code>index()</code>) e chama <code>processar_imagem()</code>.
+      </p>
+
+      <form method="post" enctype="multipart/form-data">
+        <label for="file-ovos" class="file-label">Escolher imagem de ovos</label>
+        <input id="file-ovos" type="file" name="imagem" accept="image/*" required />
+        <button type="submit">Processar ovos</button>
+      </form>
+
+      <div class="result">
+        {% if imagem %}
+          <h3>Imagem processada</h3>
+          <img src="data:image/png;base64,{{ imagem }}" alt="Resultado do processamento de ovos" />
+        {% endif %}
+
+        {% if ovos_info %}
+          <div class="divider"></div>
+          <h3>Informações de cor para cada ovo</h3>
+
+          {% for ovo in ovos_info %}
+            {% set HEX = ovo.hex or ovo.HEX %}
+            {% set RGB = ovo.rgb or ovo.RGB %}
+            {% set LAB = ovo.lab or ovo.LAB %}
+            {% set LCH = ovo.lch or ovo.LCH %}
+            {% set XYZ = ovo.xyz or ovo.XYZ %}
+            {% set ACES = ovo.aces or ovo.ACES %}
+            {% set ACEScg = ovo.acescg or ovo.ACEScg %}
+            {% set LINSRGB = ovo.linsrgb or ovo.Linear_sRGB %}
+            {% set CMYK = ovo.cmyk or ovo.CMYK %}
+            {% set NUM = ovo.num or loop.index %}
+            {% set ORI = ovo.orientacao or ovo.orientation or '-' %}
+            {% set CTR = ovo.center or ovo.centro or '-' %}
+
+            <div class="ovo-card">
+              <span class="cor-box" style="background: {{ HEX }}"></span>
+              <div class="ovo-info">
+                <h4>Ovo {{ NUM }}</h4>
+                <div class="field"><strong>Centro:</strong> {{ CTR }}</div>
+                <div class="field"><strong>Orientação:</strong> {{ ORI }}</div>
+                <div class="field"><strong>RGB:</strong> {{ RGB }}</div>
+                <div class="field"><strong>HEX:</strong> {{ HEX }}</div>
+
+                <div class="field"><strong>LAB:</strong>
+                  {% if LAB is sequence and LAB|length >= 3 %}
+                    L={{ '%.2f' % LAB[0] }}, a={{ '%.2f' % LAB[1] }}, b={{ '%.2f' % LAB[2] }}
+                  {% else %}{{ LAB }}{% endif %}
+                </div>
+
+                <div class="field"><strong>LCH:</strong>
+                  {% if LCH is sequence and LCH|length >= 3 %}
+                    L={{ '%.2f' % LCH[0] }}, C={{ '%.2f' % LCH[1] }}, H={{ '%.2f' % LCH[2] }}
+                  {% else %}{{ LCH }}{% endif %}
+                </div>
+
+                <div class="field"><strong>XYZ:</strong>
+                  {% if XYZ is sequence and XYZ|length >= 3 %}
+                    X={{ '%.3f' % XYZ[0] }}, Y={{ '%.3f' % XYZ[1] }}, Z={{ '%.3f' % XYZ[2] }}
+                  {% else %}{{ XYZ }}{% endif %}
+                </div>
+
+                <div class="field"><strong>CMYK:</strong> {{ CMYK }}</div>
+
+                <div class="field"><strong>ACES:</strong>
+                  {% if ACES is sequence and ACES|length >= 3 %}
+                    R={{ '%.4f' % ACES[0] }}, G={{ '%.4f' % ACES[1] }}, B={{ '%.4f' % ACES[2] }}
+                  {% else %}{{ ACES }}{% endif %}
+                </div>
+
+                <div class="field"><strong>ACEScg:</strong>
+                  {% if ACEScg is sequence and ACEScg|length >= 3 %}
+                    R={{ '%.4f' % ACEScg[0] }}, G={{ '%.4f' % ACEScg[1] }}, B={{ '%.4f' % ACEScg[2] }}
+                  {% else %}{{ ACEScg }}{% endif %}
+                </div>
+
+                <div class="field"><strong>Linear sRGB:</strong>
+                  {% if LINSRGB is sequence and LINSRGB|length >= 3 %}
+                    R={{ '%.4f' % LINSRGB[0] }}, G={{ '%.4f' % LINSRGB[1] }}, B={{ '%.4f' % LINSRGB[2] }}
+                  {% else %}{{ LINSRGB }}{% endif %}
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+    </section>
+
+    <!-- OPÇÃO 2: CALIBRAR (ColorChecker) -->
+    <section class="section">
+      <h2>2) Calibrar (ColorChecker)</h2>
+      <p class="hint">
+        Selecione uma imagem contendo a paleta. Ao enviar, a rota <strong>"/calibrar"</strong> chama o pipeline do
+        <code>calibrate.py</code>: detecta ArUco, gera imagem anotada, retifica (warp) a paleta, resolve a matriz e salva em
+        <code>config/color_calibration.json</code>. Tudo aparece abaixo.
+      </p>
+
+      <form action="{{ url_for('routes.calibrar') }}" method="post" enctype="multipart/form-data">
+        <label for="file-calib" class="file-label">Escolher imagem para calibração</label>
+        <input id="file-calib" type="file" name="image" accept=".jpg,.jpeg,.png,.bmp,.tif,.tiff,.webp" required />
+        <div class="checks">
+          <label><input type="checkbox" name="as_reference" value="1" /> Usar esta imagem como referência (gera/atualiza <code>config/ref_colors.csv</code>)</label>
+          <label><input type="checkbox" name="ignore_saved" value="1" /> Ignorar calibração existente (<code>config/color_calibration.json</code>)</label>
+          <label><input type="checkbox" name="purge_saved" value="1" /> Apagar calibrações anteriores antes de calibrar (reset)</label>
+        </div>
+        <button type="submit">Calibrar</button>
+      </form>
+
+      <div class="result">
+        {% if img_url %}
+          <h3>Imagem enviada</h3>
+          <img src="{{ img_url }}" alt="Imagem enviada" />
+        {% endif %}
+
+        {% if ann_url %}
+          <h3>Detecção ArUco</h3>
+          <img src="{{ ann_url }}" alt="ArUco anotado" />
+        {% endif %}
+
+        {% if warp_url %}
+          <h3>Warp da paleta</h3>
+          <img src="{{ warp_url }}" alt="Warp da paleta" />
+        {% endif %}
+
+        {% if warp_debug_url %}
+          <h3>Warp (debug)</h3>
+          <img src="{{ warp_debug_url }}" alt="Warp debug" />
+        {% endif %}
+
+        {% if warp_labels_url %}
+          <h3>Warp (labels)</h3>
+          <img src="{{ warp_labels_url }}" alt="Warp labels" />
+        {% endif %}
+
+        {% if calibrated_url %}
+          <h3>Imagem calibrada</h3>
+          <img src="{{ calibrated_url }}" alt="Imagem calibrada" />
+        {% endif %}
+
+        {% if cfg %}
+          <div class="divider"></div>
+          <h3>Configuração gerada (<code>{{ cfg_path }}</code>)</h3>
+          <pre>{{ cfg | tojson(indent=2) }}</pre>
+        {% endif %}
+      </div>
+    </section>
+
+  </div>
+
+  <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
