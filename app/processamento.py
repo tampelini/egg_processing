@@ -157,8 +157,17 @@ def processar_imagem(imagem):
             cv2.ellipse(mask, (centro_x, centro_y), (eixo_maior, eixo_menor), 0, 0, 360, 255, -1)
 
             # Agora o cálculo da média usa a imagem já convertida
-            mean_val = cv2.mean(imagem_rgb_backup, mask=mask)[:3]
+            mean_val, std_val = cv2.meanStdDev(imagem_rgb_backup, mask=mask)
+            mean_val = mean_val.flatten()[:3]
+            rgb_std = std_val.flatten()[:3]
             rgb = tuple(map(int, mean_val))
+
+            # Estatísticas em HSV
+            masked_rgb = cv2.bitwise_and(imagem_rgb_backup, imagem_rgb_backup, mask=mask)
+            hsv_region = cv2.cvtColor(masked_rgb, cv2.COLOR_RGB2HSV)
+            hsv_mean, hsv_std = cv2.meanStdDev(hsv_region, mask=mask)
+            hsv_mean = hsv_mean.flatten()[:3]
+            hsv_std = hsv_std.flatten()[:3]
             hexval, cmyk = rgb_to_hex(rgb), rgb_to_cmyk(rgb)
             lab = rgb2lab(np.array([[rgb]]) / 255.0)[0][0]
             L, a_, b_ = lab
@@ -178,6 +187,8 @@ def processar_imagem(imagem):
 
             ovos_info.append({
                 "num": cnt, "rgb": rgb, "hex": hexval, "cmyk": cmyk,
+                "rgb_std": tuple(rgb_std),
+                "hsv_mean": tuple(hsv_mean), "hsv_std": tuple(hsv_std),
                 "lab": (L, a_, b_), "lch": (L, C, H),
                 "xyz": tuple(xyz), "aces": tuple(aces), "acescg": tuple(acescg),
                 "linsrgb": tuple(linsrgb)

@@ -40,12 +40,15 @@
           {% for ovo in ovos_info %}
             {% set HEX = ovo.hex or ovo.HEX %}
             {% set RGB = ovo.rgb or ovo.RGB %}
+            {% set RGB_STD = ovo.rgb_std or ovo.RGB_std %}
             {% set LAB = ovo.lab or ovo.LAB %}
             {% set LCH = ovo.lch or ovo.LCH %}
             {% set XYZ = ovo.xyz or ovo.XYZ %}
             {% set ACES = ovo.aces or ovo.ACES %}
             {% set ACEScg = ovo.acescg or ovo.ACEScg %}
             {% set LINSRGB = ovo.linsrgb or ovo.Linear_sRGB %}
+            {% set HSV_MEAN = ovo.hsv_mean or ovo.HSV_mean %}
+            {% set HSV_STD = ovo.hsv_std or ovo.HSV_std %}
             {% set CMYK = ovo.cmyk or ovo.CMYK %}
             {% set NUM = ovo.num or loop.index %}
             {% set ORI = ovo.orientacao or ovo.orientation or '-' %}
@@ -59,6 +62,24 @@
                 <div class="field"><strong>Orientação:</strong> {{ ORI }}</div>
                 <div class="field"><strong>RGB:</strong> {{ RGB }}</div>
                 <div class="field"><strong>HEX:</strong> {{ HEX }}</div>
+
+                <div class="field"><strong>HSV (média):</strong>
+                  {% if HSV_MEAN is sequence and HSV_MEAN|length >= 3 %}
+                    H={{ '%.2f' % HSV_MEAN[0] }}, S={{ '%.2f' % HSV_MEAN[1] }}, V={{ '%.2f' % HSV_MEAN[2] }}
+                  {% else %}{{ HSV_MEAN }}{% endif %}
+                </div>
+
+                <div class="field"><strong>HSV (desvio):</strong>
+                  {% if HSV_STD is sequence and HSV_STD|length >= 3 %}
+                    H={{ '%.2f' % HSV_STD[0] }}, S={{ '%.2f' % HSV_STD[1] }}, V={{ '%.2f' % HSV_STD[2] }}
+                  {% else %}{{ HSV_STD }}{% endif %}
+                </div>
+
+                <div class="field"><strong>RGB (desvio):</strong>
+                  {% if RGB_STD is sequence and RGB_STD|length >= 3 %}
+                    R={{ '%.2f' % RGB_STD[0] }}, G={{ '%.2f' % RGB_STD[1] }}, B={{ '%.2f' % RGB_STD[2] }}
+                  {% else %}{{ RGB_STD }}{% endif %}
+                </div>
 
                 <div class="field"><strong>LAB:</strong>
                   {% if LAB is sequence and LAB|length >= 3 %}
