@@ -176,11 +176,13 @@ def processar_imagem(imagem):
                 output_colourspace=colour.RGB_COLOURSPACES['ACEScg'])
             linsrgb = colour.cctf_decoding(rgb_norm)
 
+            orien = 'Horizontal' if w / h > 1.1 else 'Vertical' if w / h < 0.9 else 'Indefinido'
             ovos_info.append({
                 "num": cnt, "rgb": rgb, "hex": hexval, "cmyk": cmyk,
                 "lab": (L, a_, b_), "lch": (L, C, H),
                 "xyz": tuple(xyz), "aces": tuple(aces), "acescg": tuple(acescg),
-                "linsrgb": tuple(linsrgb)
+                "linsrgb": tuple(linsrgb),
+                "center": (centro_x, centro_y), "orientacao": orien
             })
 
             # --- Anotações na imagem ---
@@ -195,7 +197,6 @@ def processar_imagem(imagem):
             cv2.rectangle(imagem_backup, (x, rect_y1), (x + 25, rect_y2), tuple(int(c) for c in rgb[::-1]), -1)
             cv2.putText(imagem_backup, f'C:{cmyk[0]} M:{cmyk[1]} Y:{cmyk[2]} K:{cmyk[3]}',
                         (x + 30, rect_y1 + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-            orien = 'Horizontal' if w / h > 1.1 else 'Vertical' if w / h < 0.9 else 'Indefinido'
             cv2.putText(imagem_backup, orien, (x, y + h + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
             cnt += 1
 
