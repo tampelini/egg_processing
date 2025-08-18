@@ -313,19 +313,34 @@ def _load_targets_csv(config_dir: str, expected_n: int):
 
         if {"label", "row", "col", "r", "g", "b"} <= fieldset:
             for row in rd:
-                labels.append(row["label"])
-                targets.append([float(row["R"]), float(row["G"]), float(row["B"])])
+                row_l = {k.strip().lower(): v for k, v in row.items()}
+                labels.append(row_l["label"])
+                targets.append([
+                    float(row_l["r"]),
+                    float(row_l["g"]),
+                    float(row_l["b"]),
+                ])
         elif {"row", "col", "r", "g", "b"} <= fieldset:
             i = 1
             for row in rd:
+                row_l = {k.strip().lower(): v for k, v in row.items()}
                 labels.append(f"P{i:02d}")
-                targets.append([float(row["R"]), float(row["G"]), float(row["B"])])
+                targets.append([
+                    float(row_l["r"]),
+                    float(row_l["g"]),
+                    float(row_l["b"]),
+                ])
                 i += 1
         elif {"r", "g", "b"} <= fieldset:
             i = 1
             for row in rd:
+                row_l = {k.strip().lower(): v for k, v in row.items()}
                 labels.append(f"P{i:02d}")
-                targets.append([float(row["R"]), float(row["G"]), float(row["B"])])
+                targets.append([
+                    float(row_l["r"]),
+                    float(row_l["g"]),
+                    float(row_l["b"]),
+                ])
                 i += 1
         else:
             raise RuntimeError(
