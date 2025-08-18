@@ -209,32 +209,57 @@ def _draw_sampling_debug(warped, centers_px, labels, win=SAMPLE_WIN, out_dbg=Non
 
 # ===================== Solver de calibração (robusto) =====================
 
-def _solve_color_matrix(measured: np.ndarray, target: np.ndarray) -> np.ndarray:
-    """Resolve transformação afim 3x4 com regularização; fallback para regressão por canal."""
+def _solve_color_matrix(measured: np.ndarray, target: np.ndarray, solver: str = "ridge") -> np.ndarray:
+    """Resolve transformação afim 3x4; suporta 'ridge' ou 'ransac'."""
     assert measured.shape == target.shape and measured.shape[1] == 3
 
-    # 1) variância mínima para evitar degenerescência
     if np.min(np.std(target, axis=0)) < 3:
         raise RuntimeError("Targets muito pouco variados. Forneça ref_colors.csv real (não constante).")
     if np.min(np.std(measured, axis=0)) < 1:
         raise RuntimeError("Medições quase constantes. Verifique warp/amostragem (SAMPLE_WIN, margens/gaps).")
 
-    # 2) Tikhonov (ridge) para estabilizar
     N = measured.shape[0]
     A = np.hstack([measured.astype(np.float32), np.ones((N, 1), dtype=np.float32)])  # Nx4
+    M = np.zeros((3, 4), dtype=np.float32)
+
+    if solver == "ransac":
+        max_trials = 100
+        thresh = 5.0
+        for ch in range(3):
+            y = target[:, ch].astype(np.float32)
+            best_inliers = []
+            best_coef = None
+            for _ in range(max_trials):
+                idx = np.random.choice(N, 4, replace=False)
+                try:
+                    coef = np.linalg.lstsq(A[idx], y[idx], rcond=None)[0]
+                except np.linalg.LinAlgError:
+                    continue
+                resid = np.abs(A @ coef - y)
+                inliers = np.where(resid < thresh)[0]
+                if len(inliers) > len(best_inliers):
+                    best_inliers = inliers
+                    best_coef = coef
+            if len(best_inliers) >= 4:
+                coef = np.linalg.lstsq(A[best_inliers], y[best_inliers], rcond=None)[0]
+            elif best_coef is not None:
+                coef = best_coef
+            else:
+                coef = np.linalg.lstsq(A, y, rcond=None)[0]
+            M[ch, :] = coef
+        return M
+
+    # Solver ridge padrão
     lam = 1e-2
     AtA = A.T @ A + lam * np.eye(4, dtype=np.float32)
-    M = np.zeros((3, 4), dtype=np.float32)
     for ch in range(3):
         y = target[:, ch].astype(np.float32)
         x = np.linalg.solve(AtA, A.T @ y)
         M[ch, :] = x
 
-    # 3) sanity checks — ganhos/bias dentro de limites razoáveis
     gains = np.abs(M[:, :3])
     bias = np.abs(M[:, 3])
     if np.any(gains < 0.05) or np.any(gains > 5) or np.any(bias > 60):
-        # fallback: regressão por canal (y = a*x + b) — simples e estável
         Mf = np.zeros_like(M)
         for ch in range(3):
             x = measured[:, ch]
@@ -431,8 +456,22 @@ def build_calibration_from_image(image_path: str, config_dir: str, static_dir: s
     if target_rgb.shape != measured_rgb.shape:
         raise RuntimeError("Dimensão dos alvos não bate com os patches medidos (ref_colors.csv vs amostragem).")
 
+    # Balanço de branco usando patches neutros (cinza)
+    diff = np.max(np.abs(target_rgb - target_rgb.mean(axis=1, keepdims=True)), axis=1)
+    gray_idx = np.where(diff < 5)[0]
+    if len(gray_idx):
+        white_patch_mean = measured_rgb[gray_idx].mean(axis=0)
+        white_patch_mean = np.clip(white_patch_mean, 1e-6, None)
+        measured_norm = measured_rgb / white_patch_mean
+    else:
+        white_patch_mean = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+        measured_norm = measured_rgb.copy()
+
+    solver_used = "ransac"
+
     # 6) Resolve M e aplica
-    M = _solve_color_matrix(measured_rgb, target_rgb)
+    M = _solve_color_matrix(measured_norm, target_rgb, solver=solver_used)
+    M[:, :3] /= white_patch_mean.reshape(1, 3)
     corrected = _apply_color_matrix(image_bgr, M)
 
     # 7) Salva imagem calibrada e CSV das medições
@@ -464,6 +503,12 @@ def build_calibration_from_image(image_path: str, config_dir: str, static_dir: s
         "ref_colors_csv": os.path.join(config_dir, "ref_colors.csv"),
         "measured_csv": measured_csv,
         "centers_source": "patch_centers.csv" if _load_centers_from_csv(config_dir) else "parametric_grid",
+        "white_balance": {
+            "method": "gray_patches_mean" if len(gray_idx) else "none",
+            "patches": [labels[i] for i in gray_idx],
+            "mean_rgb": white_patch_mean.tolist(),
+        },
+        "solver": solver_used,
     }
     _save_calibration(config_dir, M, meta)
 

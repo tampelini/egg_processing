@@ -42,6 +42,11 @@
     "sample_win": 34,
     "ref_colors_csv": "C:\\Users\\tampe\\Desktop\\egg_processing\\config\\ref_colors.csv",
     "measured_csv": "C:\\Users\\tampe\\Desktop\\egg_processing\\config\\measured_Converted_File.csv",
-    "centers_source": "parametric_grid"
+    "centers_source": "parametric_grid",
+    "white_balance": {
+      "method": "gray_patches_mean",
+      "mean_rgb": [149.33333333333334, 149.33333333333334, 149.33333333333334]
+    },
+    "solver": "ransac"
   }
 }
