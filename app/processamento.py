@@ -118,30 +118,52 @@ def processar_imagem(imagem):
         cv2.adaptiveThreshold(cinza, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
     )
 
-    # 7. Encontrar contornos e filtrar por área
+    # Fechar pequenas falhas dentro dos ovos
+    kernel_close_size = 9  # tamanho ajustável
+    kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_close_size, kernel_close_size))
+    binario = cv2.morphologyEx(binario, cv2.MORPH_CLOSE, kernel_close)
+
+    # Remover pequenos ruídos restantes
+    kernel_open_size = 3  # tamanho ajustável
+    kernel_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_open_size, kernel_open_size))
+    binario = cv2.morphologyEx(binario, cv2.MORPH_OPEN, kernel_open)
+
+    # 7. Encontrar contornos, elipses e filtrar por área
     contornos, _ = cv2.findContours(binario, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contornos = [ctr for ctr in contornos if 100 < cv2.contourArea(ctr) < 50000]
-    boxes = [cv2.boundingRect(ctr) for ctr in contornos]
+    ovos = []
+    for ctr in contornos:
+        if 100 < cv2.contourArea(ctr) < 50000:
+            box = cv2.boundingRect(ctr)
+            ellipse = cv2.fitEllipse(ctr) if len(ctr) >= 5 else None
+            ovos.append({"contorno": ctr, "box": box, "ellipse": ellipse})
+    boxes = [ovo["box"] for ovo in ovos]
 
     # 8. Filtragem por tamanho dos ovos (remove outliers)
-    median_w = float(np.median([w for _, _, w, _ in boxes])) if boxes else 0
-    median_h = float(np.median([h for _, _, _, h in boxes])) if boxes else 0
-    boxes = [
-        b for b in boxes
-        if median_w and median_h and abs(b[2] - median_w) / median_w < 0.5 and abs(b[3] - median_h) / median_h < 0.5
+    median_w = float(np.median([b[2] for b in boxes])) if boxes else 0
+    median_h = float(np.median([b[3] for b in boxes])) if boxes else 0
+    ovos = [
+        ovo for ovo in ovos
+        if (
+            median_w
+            and median_h
+            and abs(ovo["box"][2] - median_w) / median_w < 0.5
+            and abs(ovo["box"][3] - median_h) / median_h < 0.5
+        )
     ]
+    boxes = [ovo["box"] for ovo in ovos]
 
     # 9. Agrupar ovos em linhas (para ordenação visual)
     linhas, tolerancia_y = [], median_h * 0.5 if median_h else 50
-    for box in sorted(boxes, key=lambda b: b[1]):
+    for ovo in sorted(ovos, key=lambda o: o["box"][1]):
+        box = ovo["box"]
         for linha in linhas:
-            if abs(linha[0][1] - box[1]) < tolerancia_y:
-                linha.append(box)
+            if abs(linha[0]["box"][1] - box[1]) < tolerancia_y:
+                linha.append(ovo)
                 break
         else:
-            linhas.append([box])
+            linhas.append([ovo])
     for linha in linhas:
-        linha.sort(key=lambda b: b[0])
+        linha.sort(key=lambda o: o["box"][0])
 
     # --- OTIMIZAÇÃO PRINCIPAL: converte imagem uma única vez para RGB para cálculo de média ---
     imagem_rgb_backup = cv2.cvtColor(imagem_backup, cv2.COLOR_BGR2RGB)
@@ -149,12 +171,19 @@ def processar_imagem(imagem):
     # 10. Para cada ovo, calcular média de cor e desenhar anotações
     ovos_info, cnt = [], 1
     for linha in linhas:
-        for (x, y, w, h) in linha:
+        for ovo in linha:
+            x, y, w, h = ovo["box"]
             centro_x, centro_y = x + w // 2, y + h // 2
             eixo_maior = int(w // 2 * fator_elipse)
             eixo_menor = int(h // 2 * fator_elipse)
+            angulo = 0
+            if ovo["ellipse"] is not None:
+                (cx, cy), (MA, ma), angulo = ovo["ellipse"]
+                centro_x, centro_y = int(cx), int(cy)
+                eixo_maior = int((MA / 2) * fator_elipse)
+                eixo_menor = int((ma / 2) * fator_elipse)
             mask = np.zeros(imagem_rgb_backup.shape[:2], dtype=np.uint8)
-            cv2.ellipse(mask, (centro_x, centro_y), (eixo_maior, eixo_menor), 0, 0, 360, 255, -1)
+            cv2.ellipse(mask, (centro_x, centro_y), (eixo_maior, eixo_menor), angulo, 0, 360, 255, -1)
 
             # Agora o cálculo da média usa a imagem já convertida
             mean_val = cv2.mean(imagem_rgb_backup, mask=mask)[:3]
@@ -188,7 +217,7 @@ def processar_imagem(imagem):
             if w / h > 1.1:
                 cv2.line(imagem_backup, (x, y), (x + w, y + h), (0, 0, 255), 4)
                 cv2.line(imagem_backup, (x + w, y), (x, y + h), (0, 0, 255), 4)
-            cv2.ellipse(imagem_backup, (centro_x, centro_y), (eixo_maior, eixo_menor), 0, 0, 360, (255, 0, 255), 2)
+            cv2.ellipse(imagem_backup, (centro_x, centro_y), (eixo_maior, eixo_menor), angulo, 0, 360, (255, 0, 255), 2)
             cv2.putText(imagem_backup, str(cnt), (centro_x - 10, centro_y + 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
             rect_y1 = y - 25 if y - 25 > 0 else 0
             rect_y2 = y if y > 0 else 0
