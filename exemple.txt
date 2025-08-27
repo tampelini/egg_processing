@@ -1,0 +1,20 @@
+import base64
+import io
+from PIL import Image
+
+# executa o pipeline
+annotated_image_base64, ovos_info = processar_imagem_por_url(
+    "https://exemplo.com/minha_imagem.jpg"
+)
+
+# decodifica base64 para bytes
+image_bytes = base64.b64decode(annotated_image_base64)
+
+# abre em memória
+image = Image.open(io.BytesIO(image_bytes))
+
+# mostra a imagem (abre no visualizador padrão ou notebook)
+image.show()
+
+# dados dos ovos
+print(ovos_info)
