@@ -220,3 +220,17 @@ def processar_imagem(imagem):
 
     img_b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
     return img_b64, ovos_info
+
+def processar_imagem_por_url(url: str, timeout: int = 20):
+    """
+    Baixa a imagem de `url`, executa o pipeline existente (processar_imagem)
+    e retorna (annotated_image_base64, ovos_info) sem alterar nenhuma etapa.
+    """
+    import requests
+    import io
+
+    resp = requests.get(url, timeout=timeout)
+    resp.raise_for_status()
+
+    # Mantém o pipeline intacto: passamos um file-like (BytesIO) para processar_imagem
+    return processar_imagem(io.BytesIO(resp.content))
