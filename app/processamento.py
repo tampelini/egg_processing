@@ -5,6 +5,7 @@ import base64
 import logging
 from skimage.color import rgb2lab, rgb2xyz
 import colour
+import requests
 
 logging.basicConfig(level=logging.INFO)
 
@@ -226,8 +227,6 @@ def processar_imagem_por_url(url: str, timeout: int = 20):
     Baixa a imagem de `url`, executa o pipeline existente (processar_imagem)
     e retorna (annotated_image_base64, ovos_info) sem alterar nenhuma etapa.
     """
-    import requests
-    import io
 
     resp = requests.get(url, timeout=timeout)
     resp.raise_for_status()
