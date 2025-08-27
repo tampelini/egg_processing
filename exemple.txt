@@ -1,20 +1,44 @@
 import base64
 import io
-from PIL import Image
+from cloudinary import config as cloudinary_config
+from cloudinary.uploader import upload
 
-# executa o pipeline
-annotated_image_base64, ovos_info = processar_imagem_por_url(
-    "https://exemplo.com/minha_imagem.jpg"
+# (opcional) configurar explicitamente, se não usar CLOUDINARY_URL
+# cloudinary_config(
+#     cloud_name="<cloud_name>",
+#     api_key="<api_key>",
+#     api_secret="<api_secret>",
+#     secure=True
+# )
+
+def upload_base64_to_cloudinary(b64_str: str, *, public_id=None, folder=None, overwrite=True):
+    """
+    Envia uma imagem base64 para o Cloudinary.
+    Retorna o dict da resposta, incluindo secure_url.
+    """
+    # Se preferir, pode enviar com prefixo data URI:
+    data_uri = "data:image/png;base64," + b64_str
+
+    resp = upload(
+        data_uri,
+        public_id=public_id,         # ex: "meu_resultado_ovos_123"
+        folder=folder,               # ex: "egg_project/results"
+        overwrite=overwrite,
+        resource_type="image",
+        tags=["egg", "pipeline", "annotated"],
+        use_filename=bool(public_id is None),   # se não passar public_id, usa nome do arquivo
+        unique_filename=True
+    )
+    return resp
+
+# Exemplo integrando ao seu pipeline:
+annotated_image_base64, ovos_info = processar_imagem_por_url("https://exemplo.com/minha_imagem.jpg")
+
+resp = upload_base64_to_cloudinary(
+    annotated_image_base64,
+    public_id=None,
+    folder="egg_project/results"
 )
 
-# decodifica base64 para bytes
-image_bytes = base64.b64decode(annotated_image_base64)
-
-# abre em memória
-image = Image.open(io.BytesIO(image_bytes))
-
-# mostra a imagem (abre no visualizador padrão ou notebook)
-image.show()
-
-# dados dos ovos
-print(ovos_info)
+print("URL segura:", resp["secure_url"])
+print("Public ID:", resp["public_id"])
