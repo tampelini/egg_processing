@@ -4,7 +4,6 @@ import io
 import base64
 import logging
 import requests
-import exifread
 from skimage.color import rgb2lab, rgb2xyz
 import colour
 
@@ -77,60 +76,39 @@ def verificar_predominio_cinza(imagem_cv):
     return variancia_rgb < 100  # ajustável
 
 # ---------------------------
-# EXIF (rotação/orientação)
+# Leitura de imagem + Landscape
 # ---------------------------
 
-def _extrair_orientacao_exif_bytes(raw_bytes):
+def _ensure_landscape(img_bgr: np.ndarray) -> np.ndarray:
     """
-    Lê a tag de orientação EXIF a partir de bytes (JPEG/PNG com EXIF).
-    Retorna 1 (padrão), 3, 6 ou 8 quando disponível.
+    Garante orientação 'landscape' apenas pela proporção:
+    se altura > largura, rotaciona 90° sentido horário.
     """
-    try:
-        bio = io.BytesIO(raw_bytes)
-        tags = exifread.process_file(bio, stop_tag="Orientation", details=False)
-        tag = tags.get("Image Orientation") or tags.get("EXIF Orientation")
-        if not tag:
-            return 1
-        val = tag.values[0] if hasattr(tag, "values") else int(str(tag))
-        return int(val)
-    except Exception:
-        return 1
-
-def _aplicar_orientacao_exif(img_bgr, orientation):
-    """
-    Aplica rotação conforme orientação EXIF:
-    1: normal | 3: 180° | 6: 90° CW | 8: 90° CCW
-    """
-    if orientation == 3:
-        return cv2.rotate(img_bgr, cv2.ROTATE_180)
-    elif orientation == 6:
+    h, w = img_bgr.shape[:2]
+    if h > w:
         return cv2.rotate(img_bgr, cv2.ROTATE_90_CLOCKWISE)
-    elif orientation == 8:
-        return cv2.rotate(img_bgr, cv2.ROTATE_90_COUNTERCLOCKWISE)
     return img_bgr
 
 def _ler_imagem_cv(imagem):
     """
-    Lê imagem em BGR (uint8) sem PIL.
+    Lê imagem em BGR (uint8) sem usar EXIF.
     Aceita: np.ndarray (BGR/BGRA), bytes/bytearray, file-like, caminho (str).
-    Corrige orientação com base no EXIF quando possível.
+    Ao final, garante orientação landscape via proporção (sem ler metadados).
     """
     # np.ndarray (BGR/BGRA)
     if isinstance(imagem, np.ndarray):
         img = imagem
         if img.ndim == 3 and img.shape[2] == 4:  # BGRA -> BGR
             img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-        return img
+        return _ensure_landscape(img)
 
     # bytes / bytearray
     if isinstance(imagem, (bytes, bytearray)):
-        raw = bytes(imagem)
-        orient = _extrair_orientacao_exif_bytes(raw)
-        data = np.frombuffer(raw, dtype=np.uint8)
+        data = np.frombuffer(bytes(imagem), dtype=np.uint8)
         img = cv2.imdecode(data, cv2.IMREAD_COLOR)
         if img is None:
             raise ValueError("Falha ao decodificar bytes de imagem.")
-        return _aplicar_orientacao_exif(img, orient)
+        return _ensure_landscape(img)
 
     # file-like (tem .read())
     if hasattr(imagem, "read"):
@@ -140,23 +118,21 @@ def _ler_imagem_cv(imagem):
                 imagem.seek(0)
         except Exception:
             pass
-        orient = _extrair_orientacao_exif_bytes(raw)
         data = np.frombuffer(raw, dtype=np.uint8)
         img = cv2.imdecode(data, cv2.IMREAD_COLOR)
         if img is None:
             raise ValueError("Falha ao decodificar stream de imagem.")
-        return _aplicar_orientacao_exif(img, orient)
+        return _ensure_landscape(img)
 
     # caminho (string)
     if isinstance(imagem, str):
         with open(imagem, "rb") as f:
             raw = f.read()
-        orient = _extrair_orientacao_exif_bytes(raw)
         data = np.frombuffer(raw, dtype=np.uint8)
         img = cv2.imdecode(data, cv2.IMREAD_COLOR)
         if img is None:
             raise ValueError(f"Falha ao ler a imagem em: {imagem}")
-        return _aplicar_orientacao_exif(img, orient)
+        return _ensure_landscape(img)
 
     raise TypeError("Tipo de entrada de imagem não suportado.")
 
@@ -172,7 +148,7 @@ def processar_imagem(imagem):
     """
     fator_elipse = 0.8  # proporção dos semi-eixos da elipse
 
-    # 1) Ler e preparar (com correção EXIF automática)
+    # 1) Ler e preparar (garantindo landscape pela proporção)
     imagem_cv = _ler_imagem_cv(imagem)          # BGR
     imagem_cv = cortar_bordas_proporcional(imagem_cv)
     imagem_backup = imagem_cv.copy()            # backup para cálculo de cor fiel
@@ -183,9 +159,9 @@ def processar_imagem(imagem):
 
     # 3) Se predominância de cinza, destacar bordas + unsharp + blur direcional
     if verificar_predominio_cinza(imagem_cv):
-        imagem_cv = destacar_bordas(imagem_cv)
+        #imagem_cv = destacar_bordas(imagem_cv)
         imagem_cv = aplicar_unsharp_mask(imagem_cv)
-        imagem_cv = cv2.GaussianBlur(imagem_cv, (61, 37), 0)
+        #imagem_cv = cv2.GaussianBlur(imagem_cv, (61, 37), 0)
 
     # 4) Redimensionar se maior que alvo (mantém proporção)
     h0, w0 = imagem_cv.shape[:2]
@@ -216,7 +192,7 @@ def processar_imagem(imagem):
 
     # 7) Contornos por área
     contornos, _ = cv2.findContours(binario, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contornos = [ctr for ctr in contornos if 100 < cv2.contourArea(ctr) < 50000]
+    contornos = [ctr for ctr in contornos if 200 < cv2.contourArea(ctr) < 50000]
     boxes = [cv2.boundingRect(ctr) for ctr in contornos]
 
     # 8) Filtragem por mediana (remove outliers)
@@ -250,8 +226,8 @@ def processar_imagem(imagem):
     for linha in linhas:
         for (x, y, w, h) in linha:
             centro_x, centro_y = x + w // 2, y + h // 2
-            eixo_maior = int((w // 2) * fator_elipse)
-            eixo_menor = int((h // 2) * fator_elipse)
+            eixo_maior = int((w // 2) * 0.8)
+            eixo_menor = int((h // 2) * 0.8)
 
             # Máscara elíptica sobre o BACKUP (cores pré-filtros)
             mask = np.zeros(backup_rgb.shape[:2], dtype=np.uint8)
@@ -289,7 +265,6 @@ def processar_imagem(imagem):
             # Orientação por aspect ratio do bounding box
             orien = 'Horizontal' if w / h > 1.1 else ('Vertical' if w / h < 0.9 else 'Indefinido')
 
-            # Monta objeto rico + string pronta para exibir
             info = {
                 "num": cnt,
                 "centro": (int(centro_x), int(centro_y)),
@@ -355,7 +330,7 @@ def processar_imagem(imagem):
 
 def processar_imagem_por_url(url: str, timeout: int = 20):
     """
-    Baixa a imagem de `url`, aplica correção EXIF e processa.
+    Baixa a imagem de `url`, não usa EXIF e garante landscape pela proporção.
     Retorna (annotated_image_base64, ovos_info).
     """
     resp = requests.get(url, timeout=timeout)
