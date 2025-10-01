@@ -1,3 +1,4 @@
+# processamento.py
 import cv2
 import numpy as np
 import io
@@ -76,6 +77,66 @@ def verificar_predominio_cinza(imagem_cv):
     return variancia_rgb < 100  # ajustável
 
 # ---------------------------
+# K-means: cores predominantes
+# ---------------------------
+
+def extrair_cores_predominantes_kmeans(img_rgb: np.ndarray, mask: np.ndarray, k: int = 8):
+    """
+    Retorna as k cores predominantes (RGB) e seus tamanhos em pixels dentro da área com mask>0.
+    Usa k-means (OpenCV) em espaço RGB.
+    Saída: lista de dicts ordenada por contagem desc:
+        [{"rgb": (r,g,b), "hex": "#RRGGBB", "count": int, "perc": float}, ...]
+    """
+    ys, xs = np.where(mask > 0)
+    if len(ys) == 0:
+        return []
+
+    pixels = img_rgb[ys, xs].reshape(-1, 3).astype(np.float32)
+
+    # Ajusta K se houver poucos pixels
+    k_eff = min(k, len(pixels))
+    if k_eff <= 0:
+        return []
+
+    # Critérios do kmeans
+    criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_MAX_ITER, 20, 1.0)
+
+    # Executa kmeans
+    # (Dica: para repetibilidade, você pode setar np.random.seed(0) antes)
+    compactness, labels, centers = cv2.kmeans(
+        data=pixels,
+        K=k_eff,
+        bestLabels=None,
+        criteria=criteria,
+        attempts=5,
+        flags=cv2.KMEANS_PP_CENTERS
+    )
+
+    labels = labels.flatten()
+    counts = np.bincount(labels, minlength=k_eff)
+
+    order = np.argsort(-counts)
+    total = counts.sum()
+
+    resultado = []
+    for idx in order:
+        rgb = tuple(int(round(v)) for v in centers[idx])
+        hexval = rgb_to_hex(rgb)
+        cnt = int(counts[idx])
+        perc = 100.0 * cnt / total if total else 0.0
+        resultado.append({"rgb": rgb, "hex": hexval, "count": cnt, "perc": perc})
+
+    return resultado
+
+def _formatar_top_cores_text(top_cores):
+    """
+    Gera uma string amigável para exibir no index (ex.: "#A1B2C3 (42.5%) — 1234 px, ...").
+    Limita a 8 cores (já é o padrão do k-means).
+    """
+    partes = [f"{c['hex']} ({c['perc']:.1f}%) — {c['count']} px" for c in top_cores[:8]]
+    return ", ".join(partes)
+
+# ---------------------------
 # Leitura de imagem + Landscape
 # ---------------------------
 
@@ -143,8 +204,14 @@ def _ler_imagem_cv(imagem):
 def processar_imagem(imagem):
     """
     Processa a imagem detectando ovos, extraindo a média de cor (em máscara elíptica)
-    a partir do backup pré-filtros, e gera uma imagem anotada (base64 PNG) + metadados.
-    Cada item de ovos_info contém 'centro', 'orientacao' e 'descricao' formatada.
+    e as 8 cores predominantes (k-means) a partir do backup pré-filtros, e gera
+    uma imagem anotada (base64 PNG) + metadados.
+
+    Retorna: (img_b64, ovos_info)
+      - img_b64: imagem anotada (PNG em base64)
+      - ovos_info: lista de dicionários por ovo, com campos como:
+          num, centro, orientacao, rgb, hex, cmyk, lab, lch, xyz, aces, acescg, linsrgb,
+          top_cores (lista de cores) e top_cores_text (resumo para exibir no index)
     """
     fator_elipse = 0.8  # proporção dos semi-eixos da elipse
 
@@ -157,11 +224,9 @@ def processar_imagem(imagem):
     if imagem_escura(imagem_cv, limiar_media=50):
         imagem_cv = clarear_imagem(imagem_cv, fator=1.8)
 
-    # 3) Se predominância de cinza, destacar bordas + unsharp + blur direcional
+    # 3) Se predominância de cinza, realçar
     if verificar_predominio_cinza(imagem_cv):
-        #imagem_cv = destacar_bordas(imagem_cv)
         imagem_cv = aplicar_unsharp_mask(imagem_cv)
-        #imagem_cv = cv2.GaussianBlur(imagem_cv, (61, 37), 0)
 
     # 4) Redimensionar se maior que alvo (mantém proporção)
     h0, w0 = imagem_cv.shape[:2]
@@ -226,8 +291,8 @@ def processar_imagem(imagem):
     for linha in linhas:
         for (x, y, w, h) in linha:
             centro_x, centro_y = x + w // 2, y + h // 2
-            eixo_maior = int((w // 2) * 0.8)
-            eixo_menor = int((h // 2) * 0.8)
+            eixo_maior = int((w // 2) * fator_elipse)
+            eixo_menor = int((h // 2) * fator_elipse)
 
             # Máscara elíptica sobre o BACKUP (cores pré-filtros)
             mask = np.zeros(backup_rgb.shape[:2], dtype=np.uint8)
@@ -237,7 +302,16 @@ def processar_imagem(imagem):
             mean_rgb = cv2.mean(backup_rgb, mask=mask)[:3]
             rgb = tuple(int(round(v)) for v in mean_rgb)
 
-            # Espaços de cor
+            # ===== Top 8 cores predominantes na área elíptica (k-means) =====
+            top_cores = extrair_cores_predominantes_kmeans(backup_rgb, mask, k=8)
+
+            # PRINT para teste no console
+            print(f"\nOvo #{cnt} - Top 8 cores predominantes (dentro da elipse):")
+            for i, c in enumerate(top_cores, start=1):
+                print(f"  {i:02d}) RGB={c['rgb']}  HEX={c['hex']}  "
+                      f"pixels={c['count']}  ({c['perc']:.2f}%)")
+
+            # Espaços de cor (da média)
             hexval = rgb_to_hex(rgb)
             cmyk = rgb_to_cmyk(rgb)
 
@@ -265,6 +339,9 @@ def processar_imagem(imagem):
             # Orientação por aspect ratio do bounding box
             orien = 'Horizontal' if w / h > 1.1 else ('Vertical' if w / h < 0.9 else 'Indefinido')
 
+            # Texto amigável para usar no index
+            top_cores_text = _formatar_top_cores_text(top_cores)
+
             info = {
                 "num": cnt,
                 "centro": (int(centro_x), int(centro_y)),
@@ -278,23 +355,24 @@ def processar_imagem(imagem):
                 "aces": tuple(map(float, aces)),
                 "acescg": tuple(map(float, acescg)),
                 "linsrgb": tuple(map(float, linsrgb)),
+                "top_cores": top_cores,          # lista de dicts (rgb, hex, count, perc)
+                "top_cores_text": top_cores_text # string pronta para exibir no index
             }
 
             info["descricao"] = (
                 f"Centro: {info['centro']}\n"
                 f"Orientação: {info['orientacao']}\n"
-                f"RGB: {info['rgb']}\n"
-                f"HEX: {info['hex']}\n"
+                f"RGB (média): {info['rgb']}\n"
+                f"HEX (média): {info['hex']}\n"
                 f"LAB: L={info['lab'][0]:.2f}, a={info['lab'][1]:.2f}, b={info['lab'][2]:.2f}\n"
                 f"LCH: L={info['lch'][0]:.2f}, C={info['lch'][1]:.2f}, H={info['lch'][2]:.2f}\n"
                 f"XYZ: X={info['xyz'][0]:.3f}, Y={info['xyz'][1]:.3f}, Z={info['xyz'][2]:.3f}\n"
                 f"CMYK: {info['cmyk']}\n"
                 f"ACES: R={info['aces'][0]:.4f}, G={info['aces'][1]:.4f}, B={info['aces'][2]:.4f}\n"
                 f"ACEScg: R={info['acescg'][0]:.4f}, G={info['acescg'][1]:.4f}, B={info['acescg'][2]:.4f}\n"
-                f"Linear sRGB: R={info['linsrgb'][0]:.4f}, G={info['linsrgb'][1]:.4f}, B={info['linsrgb'][2]:.4f}"
+                f"Linear sRGB: R={info['linsrgb'][0]:.4f}, G={info['linsrgb'][1]:.4f}, B={info['linsrgb'][2]:.4f}\n"
+                f"Top cores: {top_cores_text}"
             )
-
-            ovos_info.append(info)
 
             # ===== Anotações visuais (BGR) =====
             cv2.rectangle(imagem_backup, (x, y), (x + w, y + h), (0, 255, 0), 2)
@@ -307,18 +385,19 @@ def processar_imagem(imagem):
                         (centro_x - 10, centro_y + 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
 
-            # Amostra de cor (em BGR)
+            # Amostra de cor (em BGR) da MÉDIA
             rect_y1 = max(y - 25, 0); rect_y2 = max(y, 0)
             cv2.rectangle(imagem_backup, (x, rect_y1), (x + 25, rect_y2),
                           (int(rgb[2]), int(rgb[1]), int(rgb[0])), -1)
             cv2.putText(imagem_backup,
-                        f'C:{cmyk[0]} M:{cmyk[1]} Y:{cmyk[2]} K:{cmyk[3]}',
+                        f'C:{info["cmyk"][0]} M:{info["cmyk"][1]} Y:{info["cmyk"][2]} K:{info["cmyk"][3]}',
                         (x + 30, rect_y1 + 18),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             cv2.putText(imagem_backup, orien,
                         (x, y + h + 20),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
 
+            ovos_info.append(info)
             cnt += 1
 
     # 11) Codifica PNG (sem PIL) e retorna base64 + dados

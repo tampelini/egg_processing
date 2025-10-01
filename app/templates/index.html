@@ -5,6 +5,44 @@
   <title>Egg Processing & Calibração</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<style>
+  /* Ajustes leves para o grid de cores */
+  .top-cores {
+    margin-top: 8px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 8px;
+  }
+  .cor-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 6px 8px;
+    background: #fafafa;
+    color: #000; /* força texto preto */
+  }
+  .cor-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid rgba(0,0,0,0.2);
+    flex-shrink: 0;
+  }
+  .cor-meta {
+    font-size: 0.9rem;
+    line-height: 1.2;
+    color: #000; /* garante texto preto */
+  }
+  .cor-meta .line {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px;
+  }
+</style>
+
 </head>
 <body>
 
@@ -50,6 +88,7 @@
             {% set NUM = ovo.num or loop.index %}
             {% set ORI = ovo.orientacao or ovo.orientation or '-' %}
             {% set CTR = ovo.center or ovo.centro or '-' %}
+            {% set TOP = ovo.top_cores or ovo.topCores or [] %}
 
             <div class="ovo-card">
               <span class="cor-box" style="background: {{ HEX }}"></span>
@@ -97,6 +136,28 @@
                     R={{ '%.4f' % LINSRGB[0] }}, G={{ '%.4f' % LINSRGB[1] }}, B={{ '%.4f' % LINSRGB[2] }}
                   {% else %}{{ LINSRGB }}{% endif %}
                 </div>
+
+                {% if TOP and TOP|length > 0 %}
+                  <div class="field" style="margin-top:10px;">
+                    <strong>Top 8 cores predominantes (área elíptica):</strong>
+                  </div>
+                  <div class="top-cores">
+                    {% for c in TOP %}
+                      {% set C_HEX = c.hex or c.HEX %}
+                      {% set C_RGB = c.rgb or c.RGB %}
+                      {% set C_COUNT = c.count or c.pixels or 0 %}
+                      {% set C_PERC = c.perc or c.percent or 0 %}
+                      <div class="cor-item">
+                        <span class="cor-swatch" style="background: {{ C_HEX }}"></span>
+                        <div class="cor-meta">
+                          <div class="line"><strong>{{ C_HEX }}</strong> — {{ '%0.2f' % C_PERC }}%</div>
+                          <div class="line">Pixels: {{ C_COUNT }}</div>
+                          <div class="line">RGB: {{ C_RGB }}</div>
+                        </div>
+                      </div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
               </div>
             </div>
           {% endfor %}
