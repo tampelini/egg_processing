@@ -8,6 +8,15 @@ import requests
 from skimage.color import rgb2lab, rgb2xyz
 import colour
 
+# =====[ Suporte opcional a HEIC/HEIF via pillow-heif ]=====
+try:
+    import pillow_heif  # pip install pillow-heif
+    from PIL import Image
+    _PILLOW_HEIF_OK = True
+except Exception:
+    _PILLOW_HEIF_OK = False
+# ==========================================================
+
 logging.basicConfig(level=logging.INFO)
 
 # ---------------------------
@@ -102,7 +111,6 @@ def extrair_cores_predominantes_kmeans(img_rgb: np.ndarray, mask: np.ndarray, k:
     criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_MAX_ITER, 20, 1.0)
 
     # Executa kmeans
-    # (Dica: para repetibilidade, você pode setar np.random.seed(0) antes)
     compactness, labels, centers = cv2.kmeans(
         data=pixels,
         K=k_eff,
@@ -150,10 +158,44 @@ def _ensure_landscape(img_bgr: np.ndarray) -> np.ndarray:
         return cv2.rotate(img_bgr, cv2.ROTATE_90_CLOCKWISE)
     return img_bgr
 
+def _decode_image_bytes(raw: bytes) -> np.ndarray:
+    """
+    Tenta decodificar bytes de imagem para BGR (uint8).
+    1) OpenCV (PNG/JPEG/WebP/etc.)
+    2) pillow-heif (HEIC/HEIF) -> PIL -> RGB -> BGR
+
+    Levanta ValueError com instruções se não conseguir decodificar.
+    """
+    data = np.frombuffer(raw, dtype=np.uint8)
+
+    # 1) Tenta com OpenCV
+    img = cv2.imdecode(data, cv2.IMREAD_COLOR)
+    if img is not None:
+        return img
+
+    # 2) Tenta HEIC/HEIF com pillow-heif
+    if _PILLOW_HEIF_OK:
+        try:
+            heif = pillow_heif.read_heif(raw)  # aceita bytes
+            pil_img = Image.frombytes(heif.mode, heif.size, heif.data, "raw")
+            # Converte para RGB "normal" e depois para BGR
+            rgb = np.array(pil_img.convert("RGB"))
+            bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+            return bgr
+        except Exception as e:
+            # continua para erro final mais claro
+            pass
+
+    raise ValueError(
+        "Falha ao decodificar a imagem (possivelmente HEIC/HEIF). "
+        "Instale as dependências e tente novamente: pip install pillow-heif pillow"
+    )
+
 def _ler_imagem_cv(imagem):
     """
     Lê imagem em BGR (uint8) sem usar EXIF.
     Aceita: np.ndarray (BGR/BGRA), bytes/bytearray, file-like, caminho (str).
+    Suporta HEIC/HEIF quando 'pillow-heif' está instalado.
     Ao final, garante orientação landscape via proporção (sem ler metadados).
     """
     # np.ndarray (BGR/BGRA)
@@ -165,10 +207,7 @@ def _ler_imagem_cv(imagem):
 
     # bytes / bytearray
     if isinstance(imagem, (bytes, bytearray)):
-        data = np.frombuffer(bytes(imagem), dtype=np.uint8)
-        img = cv2.imdecode(data, cv2.IMREAD_COLOR)
-        if img is None:
-            raise ValueError("Falha ao decodificar bytes de imagem.")
+        img = _decode_image_bytes(bytes(imagem))
         return _ensure_landscape(img)
 
     # file-like (tem .read())
@@ -179,20 +218,14 @@ def _ler_imagem_cv(imagem):
                 imagem.seek(0)
         except Exception:
             pass
-        data = np.frombuffer(raw, dtype=np.uint8)
-        img = cv2.imdecode(data, cv2.IMREAD_COLOR)
-        if img is None:
-            raise ValueError("Falha ao decodificar stream de imagem.")
+        img = _decode_image_bytes(raw)
         return _ensure_landscape(img)
 
     # caminho (string)
     if isinstance(imagem, str):
         with open(imagem, "rb") as f:
             raw = f.read()
-        data = np.frombuffer(raw, dtype=np.uint8)
-        img = cv2.imdecode(data, cv2.IMREAD_COLOR)
-        if img is None:
-            raise ValueError(f"Falha ao ler a imagem em: {imagem}")
+        img = _decode_image_bytes(raw)
         return _ensure_landscape(img)
 
     raise TypeError("Tipo de entrada de imagem não suportado.")
@@ -410,6 +443,7 @@ def processar_imagem(imagem):
 def processar_imagem_por_url(url: str, timeout: int = 20):
     """
     Baixa a imagem de `url`, não usa EXIF e garante landscape pela proporção.
+    Suporta HEIC/HEIF se pillow-heif estiver instalado.
     Retorna (annotated_image_base64, ovos_info).
     """
     resp = requests.get(url, timeout=timeout)
