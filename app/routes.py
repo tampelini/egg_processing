@@ -63,7 +63,8 @@ def index():
     """
     Opção 1 (Processar ovos):
       - Form com name="imagem" envia POST para "/"
-      - Chama processar_imagem(file) e devolve (imagem em base64, ovos_info)
+      - Aceita também o campo opcional name="fator_v_backup" (float; 0.2..1.5)
+      - Chama processar_imagem(file, fator_v_backup=...) e devolve (imagem em base64, ovos_info)
     """
     imagem_b64 = None
     ovos_info = None
@@ -71,8 +72,23 @@ def index():
     if request.method == 'POST' and 'imagem' in request.files:
         file = request.files['imagem']
         if file and file.filename:
+            # lê fator_v_backup do form (padrão 1.0)
+            raw_val = (request.form.get('fator_v_backup') or '').strip()
+            try:
+                fator_v_backup = float(raw_val) if raw_val else 1.0
+            except Exception:
+                fator_v_backup = 1.0
+            # clampa para evitar valores extremos (ajuste se quiser)
+            fator_v_backup = max(0.2, min(1.5, fator_v_backup))
+
             file.stream.seek(0)
-            imagem_b64, ovos_info = processar_imagem(file)
+            # passa o fator_v_backup para o pipeline
+            imagem_b64, ovos_info = processar_imagem(
+                file,
+                fator_elipse=(0.85, 0.75),
+                usar_fitellipse=True,
+                fator_v_backup=fator_v_backup
+            )
             # normaliza cada ovo (se veio lista de dicts)
             if ovos_info:
                 ovos_info = [_normalize_ovo(o) for o in ovos_info]
