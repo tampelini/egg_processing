@@ -85,64 +85,60 @@ def verificar_predominio_cinza(imagem_cv):
     variancia_rgb = np.var(media_rgb)
     return variancia_rgb < 100  # ajustável
 
-# ---------------------------
-# K-means: cores predominantes
-# ---------------------------
+# -----------------------------------------
+# Contagem de cores por histograma (RGB puro)
+# -----------------------------------------
 
-def extrair_cores_predominantes_kmeans(img_rgb: np.ndarray, mask: np.ndarray, k: int = 8):
+def extrair_cores_predominantes_hist(img_rgb: np.ndarray,
+                                     mask: np.ndarray,
+                                     top_n: int | None = None):
     """
-    Retorna as k cores predominantes (RGB) e seus tamanhos em pixels dentro da área com mask>0.
-    Usa k-means (OpenCV) em espaço RGB.
-    Saída: lista de dicts ordenada por contagem desc:
-        [{"rgb": (r,g,b), "hex": "#RRGGBB", "count": int, "perc": float}, ...]
+    Conta cores EXATAS dentro da máscara e retorna TODAS (ordenadas por frequência).
+    - img_rgb: imagem em RGB uint8 (H, W, 3)
+    - mask: máscara binária (0/255) do mesmo HxW
+    - top_n: se None, retorna todas; se int, limita às top-N.
+
+    Retorna:
+      Lista de dicts [{rgb, hex, count, perc}] ordenada por count desc.
     """
+    # Validações para evitar qualquer troca de canais / formatos
+    if not (isinstance(img_rgb, np.ndarray) and img_rgb.ndim == 3 and img_rgb.shape[2] == 3):
+        raise ValueError("img_rgb deve ser um array (H, W, 3).")
+    if img_rgb.dtype != np.uint8:
+        raise ValueError("img_rgb deve ser dtype=uint8.")
+    if mask.shape != img_rgb.shape[:2]:
+        raise ValueError("mask e img_rgb devem ter mesmas dimensões HxW.")
+
+    # Índices dos pixels dentro da elipse
     ys, xs = np.where(mask > 0)
-    if len(ys) == 0:
+    if ys.size == 0:
         return []
 
-    pixels = img_rgb[ys, xs].reshape(-1, 3).astype(np.float32)
+    # ROI direto (N x 3) em RGB
+    roi = img_rgb[ys, xs].reshape(-1, 3)
 
-    # Ajusta K se houver poucos pixels
-    k_eff = min(k, len(pixels))
-    if k_eff <= 0:
-        return []
+    # Conta cores exatas linha-a-linha (cada linha é (R,G,B))
+    unique_rows, counts = np.unique(roi, axis=0, return_counts=True)
 
-    # Critérios do kmeans
-    criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_MAX_ITER, 20, 1.0)
-
-    # Executa kmeans
-    compactness, labels, centers = cv2.kmeans(
-        data=pixels,
-        K=k_eff,
-        bestLabels=None,
-        criteria=criteria,
-        attempts=5,
-        flags=cv2.KMEANS_PP_CENTERS
-    )
-
-    labels = labels.flatten()
-    counts = np.bincount(labels, minlength=k_eff)
-
+    # Ordena por frequência desc
     order = np.argsort(-counts)
-    total = counts.sum()
+    if top_n is not None:
+        order = order[:top_n]
 
+    total = int(counts.sum())
     resultado = []
     for idx in order:
-        rgb = tuple(int(round(v)) for v in centers[idx])
-        hexval = rgb_to_hex(rgb)
+        r, g, b = map(int, unique_rows[idx])
         cnt = int(counts[idx])
-        perc = 100.0 * cnt / total if total else 0.0
-        resultado.append({"rgb": rgb, "hex": hexval, "count": cnt, "perc": perc})
-
+        perc = (100.0 * cnt / total) if total else 0.0
+        rgb = (r, g, b)
+        resultado.append({
+            "rgb": rgb,
+            "hex": rgb_to_hex(rgb),
+            "count": cnt,
+            "perc": perc
+        })
     return resultado
-
-def _formatar_top_cores_text(top_cores):
-    """
-    Gera uma string amigável para exibir no index (ex.: "#A1B2C3 (42.5%) — 1234 px, ...").
-    Limita a 8 cores (já é o padrão do k-means).
-    """
-    partes = [f"{c['hex']} ({c['perc']:.1f}%) — {c['count']} px" for c in top_cores[:8]]
-    return ", ".join(partes)
 
 # ---------------------------
 # Leitura de imagem + Landscape
@@ -163,8 +159,6 @@ def _decode_image_bytes(raw: bytes) -> np.ndarray:
     Tenta decodificar bytes de imagem para BGR (uint8).
     1) OpenCV (PNG/JPEG/WebP/etc.)
     2) pillow-heif (HEIC/HEIF) -> PIL -> RGB -> BGR
-
-    Levanta ValueError com instruções se não conseguir decodificar.
     """
     data = np.frombuffer(raw, dtype=np.uint8)
 
@@ -178,17 +172,15 @@ def _decode_image_bytes(raw: bytes) -> np.ndarray:
         try:
             heif = pillow_heif.read_heif(raw)  # aceita bytes
             pil_img = Image.frombytes(heif.mode, heif.size, heif.data, "raw")
-            # Converte para RGB "normal" e depois para BGR
             rgb = np.array(pil_img.convert("RGB"))
             bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
             return bgr
-        except Exception as e:
-            # continua para erro final mais claro
+        except Exception:
             pass
 
     raise ValueError(
         "Falha ao decodificar a imagem (possivelmente HEIC/HEIF). "
-        "Instale as dependências e tente novamente: pip install pillow-heif pillow"
+        "Instale: pip install pillow-heif pillow"
     )
 
 def _ler_imagem_cv(imagem):
@@ -234,19 +226,21 @@ def _ler_imagem_cv(imagem):
 # Pipeline principal
 # ---------------------------
 
-def processar_imagem(imagem):
+def processar_imagem(imagem, fator_elipse=(0.85, 0.75), usar_fitellipse=True):
     """
-    Processa a imagem detectando ovos, extraindo a média de cor (em máscara elíptica)
-    e as 8 cores predominantes (k-means) a partir do backup pré-filtros, e gera
-    uma imagem anotada (base64 PNG) + metadados.
+    Processa a imagem detectando ovos, extraindo a média de cor (em máscara elíptica rotacionada)
+    e **todas as cores** (histograma RGB exato) a partir do backup pré-filtros, e
+    gera uma imagem anotada (base64 PNG) + metadados.
 
-    Retorna: (img_b64, ovos_info)
-      - img_b64: imagem anotada (PNG em base64)
-      - ovos_info: lista de dicionários por ovo, com campos como:
-          num, centro, orientacao, rgb, hex, cmyk, lab, lch, xyz, aces, acescg, linsrgb,
-          top_cores (lista de cores) e top_cores_text (resumo para exibir no index)
+    Args:
+        imagem: np.ndarray | bytes | file-like | str
+        fator_elipse: (fx, fy) fatores aplicados aos semi-eixos (escala por eixo)
+        usar_fitellipse: se True, usa cv2.fitEllipse (orientação real); fallback para bbox
+
+    Retorna:
+        (img_b64, ovos_info)
     """
-    fator_elipse = 0.8  # proporção dos semi-eixos da elipse
+    fx, fy = map(float, fator_elipse)
 
     # 1) Ler e preparar (garantindo landscape pela proporção)
     imagem_cv = _ler_imagem_cv(imagem)          # BGR
@@ -291,30 +285,31 @@ def processar_imagem(imagem):
     # 7) Contornos por área
     contornos, _ = cv2.findContours(binario, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contornos = [ctr for ctr in contornos if 200 < cv2.contourArea(ctr) < 50000]
-    boxes = [cv2.boundingRect(ctr) for ctr in contornos]
 
-    # 8) Filtragem por mediana (remove outliers)
+    # 8) Bounding boxes e filtragem por mediana (remove outliers)
+    boxes = [cv2.boundingRect(ctr) for ctr in contornos]
     median_w = float(np.median([w for _, _, w, _ in boxes])) if boxes else 0.0
     median_h = float(np.median([h for _, _, _, h in boxes])) if boxes else 0.0
     if median_w and median_h:
-        boxes = [
-            b for b in boxes
-            if abs(b[2] - median_w) / median_w < 0.5 and abs(b[3] - median_h) / median_h < 0.5
+        paired = [
+            (b, c) for b, c in zip(boxes, contornos)
+            if abs(b[2] - median_w) / (median_w + 1e-6) < 0.5
+            and abs(b[3] - median_h) / (median_h + 1e-6) < 0.5
         ]
     else:
-        boxes = []
+        paired = []
 
     # 9) Agrupar em linhas (para ordenação)
-    linhas, tolerancia_y = [], median_h * 0.5 if median_h else 50
-    for box in sorted(boxes, key=lambda bb: bb[1]):
+    linhas, tolerancia_y = [], (median_h * 0.5 if median_h else 50)
+    for (x, y, w, h), ctr in sorted(paired, key=lambda it: it[0][1]):
         for linha in linhas:
-            if abs(linha[0][1] - box[1]) < tolerancia_y:
-                linha.append(box)
+            if abs(linha[0][0][1] - y) < tolerancia_y:
+                linha.append(((x, y, w, h), ctr))
                 break
         else:
-            linhas.append([box])
+            linhas.append([((x, y, w, h), ctr)])
     for linha in linhas:
-        linha.sort(key=lambda bb: bb[0])
+        linha.sort(key=lambda it: it[0][0])  # ordenar por x
 
     # Conversão do backup para RGB (para métricas de cor corretas)
     backup_rgb = cv2.cvtColor(imagem_backup, cv2.COLOR_BGR2RGB)
@@ -322,27 +317,34 @@ def processar_imagem(imagem):
     # 10) Medidas e anotações + descrição formatada
     ovos_info, cnt = [], 1
     for linha in linhas:
-        for (x, y, w, h) in linha:
-            centro_x, centro_y = x + w // 2, y + h // 2
-            eixo_maior = int((w // 2) * fator_elipse)
-            eixo_menor = int((h // 2) * fator_elipse)
+        for (x, y, w, h), ctr in linha:
+            # --- elipse baseada no contorno (preferência) ---
+            use_fit = usar_fitellipse and len(ctr) >= 5
+            if use_fit:
+                # cv2.fitEllipse -> (center(x,y), (width, height), angle_deg)
+                (cx, cy), (W, H), ang = cv2.fitEllipse(ctr)
+                eixo_x = int(max(1, round((W * 0.5) * fx)))
+                eixo_y = int(max(1, round((H * 0.5) * fy)))
+                centro_x, centro_y = int(round(cx)), int(round(cy))
+                angle_deg = float(ang)
+            else:
+                # fallback: usa bbox alinhado
+                centro_x, centro_y = x + w // 2, y + h // 2
+                eixo_x = int(max(1, round((w * 0.5) * fx)))
+                eixo_y = int(max(1, round((h * 0.5) * fy)))
+                angle_deg = 0.0
 
-            # Máscara elíptica sobre o BACKUP (cores pré-filtros)
+            # Máscara elíptica (rotacionada conforme angle_deg)
             mask = np.zeros(backup_rgb.shape[:2], dtype=np.uint8)
-            cv2.ellipse(mask, (centro_x, centro_y), (eixo_maior, eixo_menor), 0, 0, 360, 255, -1)
+            cv2.ellipse(mask, (centro_x, centro_y), (eixo_x, eixo_y),
+                        angle_deg, 0, 360, 255, -1)
 
             # Média RGB (0..255) sobre backup
             mean_rgb = cv2.mean(backup_rgb, mask=mask)[:3]
             rgb = tuple(int(round(v)) for v in mean_rgb)
 
-            # ===== Top 8 cores predominantes na área elíptica (k-means) =====
-            top_cores = extrair_cores_predominantes_kmeans(backup_rgb, mask, k=8)
-
-            # PRINT para teste no console
-            print(f"\nOvo #{cnt} - Top 8 cores predominantes (dentro da elipse):")
-            for i, c in enumerate(top_cores, start=1):
-                print(f"  {i:02d}) RGB={c['rgb']}  HEX={c['hex']}  "
-                      f"pixels={c['count']}  ({c['perc']:.2f}%)")
+            # >>> TODAS as cores (histograma RGB exato) na área elíptica <<<
+            todas_cores = extrair_cores_predominantes_hist(backup_rgb, mask, top_n=None)
 
             # Espaços de cor (da média)
             hexval = rgb_to_hex(rgb)
@@ -351,7 +353,7 @@ def processar_imagem(imagem):
             lab_vec = rgb2lab(np.array([[rgb]]) / 255.0)[0][0]
             L, a_, b_ = float(lab_vec[0]), float(lab_vec[1]), float(lab_vec[2])
             C = float((a_ ** 2 + b_ ** 2) ** 0.5)
-            H = float(np.degrees(np.arctan2(b_, a_)) % 360)
+            Hh = float(np.degrees(np.arctan2(b_, a_)) % 360)
 
             xyz = rgb2xyz(np.array([[rgb]]) / 255.0)[0][0]
             X, Y, Z = float(xyz[0]), float(xyz[1]), float(xyz[2])
@@ -369,11 +371,12 @@ def processar_imagem(imagem):
             )
             linsrgb = colour.cctf_decoding(rgb_norm)
 
-            # Orientação por aspect ratio do bounding box
-            orien = 'Horizontal' if w / h > 1.1 else ('Vertical' if w / h < 0.9 else 'Indefinido')
+            # Orientação: baseada nos eixos da elipse (ou bbox no fallback)
+            orien = 'Horizontal' if eixo_x >= eixo_y * 1.1 else ('Vertical' if eixo_y >= eixo_x * 1.1 else 'Indefinido')
 
-            # Texto amigável para usar no index
-            top_cores_text = _formatar_top_cores_text(top_cores)
+            # Texto de pré-visualização (somente as 8 primeiras para caber no index/UI)
+            preview = todas_cores[:8]
+            top_cores_preview_text = ", ".join([f"{c['hex']} ({c['perc']:.1f}%) — {c['count']} px" for c in preview])
 
             info = {
                 "num": cnt,
@@ -383,18 +386,22 @@ def processar_imagem(imagem):
                 "hex": hexval,
                 "cmyk": tuple(map(int, cmyk)),
                 "lab": (L, a_, b_),
-                "lch": (L, C, H),
+                "lch": (L, C, Hh),
                 "xyz": (X, Y, Z),
                 "aces": tuple(map(float, aces)),
                 "acescg": tuple(map(float, acescg)),
                 "linsrgb": tuple(map(float, linsrgb)),
-                "top_cores": top_cores,          # lista de dicts (rgb, hex, count, perc)
-                "top_cores_text": top_cores_text # string pronta para exibir no index
+                # Campo completo: TODAS as cores encontradas
+                "todas_cores": todas_cores,              # lista [{rgb, hex, count, perc}] (sem limite)
+                # Campo curto só para UI/preview
+                "top_cores_preview_text": top_cores_preview_text,
+                "ellipse_angle_deg": angle_deg
             }
 
             info["descricao"] = (
                 f"Centro: {info['centro']}\n"
                 f"Orientação: {info['orientacao']}\n"
+                f"Ângulo da elipse: {angle_deg:.1f}°\n"
                 f"RGB (média): {info['rgb']}\n"
                 f"HEX (média): {info['hex']}\n"
                 f"LAB: L={info['lab'][0]:.2f}, a={info['lab'][1]:.2f}, b={info['lab'][2]:.2f}\n"
@@ -404,16 +411,16 @@ def processar_imagem(imagem):
                 f"ACES: R={info['aces'][0]:.4f}, G={info['aces'][1]:.4f}, B={info['aces'][2]:.4f}\n"
                 f"ACEScg: R={info['acescg'][0]:.4f}, G={info['acescg'][1]:.4f}, B={info['acescg'][2]:.4f}\n"
                 f"Linear sRGB: R={info['linsrgb'][0]:.4f}, G={info['linsrgb'][1]:.4f}, B={info['linsrgb'][2]:.4f}\n"
-                f"Top cores: {top_cores_text}"
+                f"Top (prévia): {top_cores_preview_text}"
             )
 
             # ===== Anotações visuais (BGR) =====
             cv2.rectangle(imagem_backup, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            if w / h > 1.1:
+            if w / (h + 1e-6) > 1.1:
                 cv2.line(imagem_backup, (x, y), (x + w, y + h), (0, 0, 255), 4)
                 cv2.line(imagem_backup, (x + w, y), (x, y + h), (0, 0, 255), 4)
-            cv2.ellipse(imagem_backup, (centro_x, centro_y), (eixo_maior, eixo_menor),
-                        0, 0, 360, (255, 0, 255), 2)
+            cv2.ellipse(imagem_backup, (centro_x, centro_y), (eixo_x, eixo_y),
+                        angle_deg, 0, 360, (255, 0, 255), 2)
             cv2.putText(imagem_backup, str(cnt),
                         (centro_x - 10, centro_y + 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
@@ -433,19 +440,20 @@ def processar_imagem(imagem):
             ovos_info.append(info)
             cnt += 1
 
-    # 11) Codifica PNG (sem PIL) e retorna base64 + dados
+    # 11) Codifica PNG e retorna base64 + dados
     ok, buf = cv2.imencode(".png", imagem_backup)
     if not ok:
         raise RuntimeError("Falha ao codificar a imagem de saída em PNG.")
     img_b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
     return img_b64, ovos_info
 
-def processar_imagem_por_url(url: str, timeout: int = 20):
+def processar_imagem_por_url(url: str, timeout: int = 20, fator_elipse=(0.85, 0.75), usar_fitellipse=True):
     """
     Baixa a imagem de `url`, não usa EXIF e garante landscape pela proporção.
     Suporta HEIC/HEIF se pillow-heif estiver instalado.
-    Retorna (annotated_image_base64, ovos_info).
     """
     resp = requests.get(url, timeout=timeout)
     resp.raise_for_status()
-    return processar_imagem(io.BytesIO(resp.content))
+    return processar_imagem(io.BytesIO(resp.content),
+                            fator_elipse=fator_elipse,
+                            usar_fitellipse=usar_fitellipse)
