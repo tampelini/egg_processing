@@ -60,6 +60,72 @@ input[type=file] {
 .checks { display: grid; gap: 8px; margin-top: 6px; }
 label { display: flex; gap: 8px; align-items: flex-start; }
 
+.ajustes-box {
+  border: 1px solid var(--border);
+  background: var(--panel2);
+  border-radius: 10px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.ajustes-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.ajustes-grid {
+  display: grid;
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .ajustes-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+}
+
+.ajuste {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ajuste-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.ajuste-head label {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  font-weight: 600;
+  color: #e5e5e5;
+}
+
+.ajuste-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.ajuste input[type=number] {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  color: var(--text);
+}
+
+.ajuste small {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 button {
   background: var(--primary);
   color: #fff;
