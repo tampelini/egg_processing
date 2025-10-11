@@ -65,6 +65,65 @@ def ajustar_brilho_hsv(img_bgr: np.ndarray, fator_v: float = 1.0) -> np.ndarray:
     hsv[:, :, 2] = v
     return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
 
+
+def ajustar_contraste(img_bgr: np.ndarray, fator: float = 1.0) -> np.ndarray:
+    """Aplica ganho de contraste simples mantendo o ponto médio em 128."""
+    fator = float(fator)
+    if abs(fator - 1.0) < 1e-6:
+        return img_bgr
+    img = img_bgr.astype(np.float32)
+    img = (img - 127.5) * fator + 127.5
+    return np.clip(img, 0, 255).astype(np.uint8)
+
+
+def ajustar_saturacao(img_bgr: np.ndarray, fator: float = 1.0) -> np.ndarray:
+    """Ajusta a saturação no espaço HSV."""
+    fator = float(fator)
+    if abs(fator - 1.0) < 1e-6:
+        return img_bgr
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+    s = hsv[:, :, 1].astype(np.float32)
+    s = np.clip(s * fator, 0, 255).astype(np.uint8)
+    hsv[:, :, 1] = s
+    return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+
+
+def ajustar_exposicao(img_bgr: np.ndarray, ev: float = 0.0) -> np.ndarray:
+    """Ajusta a exposição considerando EV (usa fator 2 ** EV)."""
+    ev = float(ev)
+    if abs(ev) < 1e-6:
+        return img_bgr
+    fator = 2.0 ** ev
+    img = img_bgr.astype(np.float32) * fator
+    return np.clip(img, 0, 255).astype(np.uint8)
+
+
+def ajustar_nitidez(img_bgr: np.ndarray, intensidade: float = 0.0) -> np.ndarray:
+    """Aplica unsharp mask controlada pela intensidade."""
+    intensidade = float(intensidade)
+    if abs(intensidade) < 1e-6:
+        return img_bgr
+    borrada = cv2.GaussianBlur(img_bgr, (0, 0), 3)
+    alpha = 1.0 + intensidade
+    beta = -intensidade
+    return cv2.addWeighted(img_bgr, alpha, borrada, beta, 0)
+
+
+def ajustar_temperatura(img_bgr: np.ndarray, intensidade: float = 0.0) -> np.ndarray:
+    """Ajusta temperatura de cor (positivo aquece, negativo esfria)."""
+    intensidade = float(intensidade)
+    if abs(intensidade) < 1e-6:
+        return img_bgr
+    img = img_bgr.astype(np.float32)
+    # escala suave (±50% no máximo quando intensidade = ±1)
+    r_scale = np.clip(1.0 + 0.5 * intensidade, 0.2, 3.0)
+    b_scale = np.clip(1.0 - 0.5 * intensidade, 0.2, 3.0)
+    g_scale = np.clip(1.0 + 0.2 * intensidade, 0.2, 3.0)
+    img[:, :, 2] *= r_scale
+    img[:, :, 0] *= b_scale
+    img[:, :, 1] *= g_scale
+    return np.clip(img, 0, 255).astype(np.uint8)
+
 def cortar_bordas_proporcional(imagem_cv, proporcao=0.03):
     """Corta bordas proporcionalmente à resolução (para remover ruído nas extremidades)."""
     h, w = imagem_cv.shape[:2]
@@ -215,7 +274,12 @@ def processar_imagem(
     imagem,
     fator_elipse=(0.85, 0.75),
     usar_fitellipse=True,
-    fator_v_backup: float = 0.8,
+    fator_v_backup: float = 1.0,
+    fator_contraste: float = 1.0,
+    fator_saturacao: float = 1.0,
+    ev_exposicao: float = 0.0,
+    fator_nitidez: float = 0.0,
+    fator_temperatura: float = 0.0,
 ):
     """
     Detecta ovos usando uma cópia tratada para segmentação (imagem_trabalho),
@@ -248,9 +312,19 @@ def processar_imagem(
         imagem_trabalho = cv2.resize(imagem_trabalho, new_size, interpolation=cv2.INTER_AREA)
         imagem_base = cv2.resize(imagem_base, new_size, interpolation=cv2.INTER_AREA)
 
-    # 5) Ajuste de brilho SOMENTE na BASE (origem de cor e render final)
+    # 5) Ajustes finos SOMENTE na BASE (origem de cor e render final)
     if abs(float(fator_v_backup) - 1.0) > 1e-6:
         imagem_base = ajustar_brilho_hsv(imagem_base, fator_v=float(fator_v_backup))
+    if abs(float(ev_exposicao)) > 1e-6:
+        imagem_base = ajustar_exposicao(imagem_base, ev=float(ev_exposicao))
+    if abs(float(fator_contraste) - 1.0) > 1e-6:
+        imagem_base = ajustar_contraste(imagem_base, fator=float(fator_contraste))
+    if abs(float(fator_saturacao) - 1.0) > 1e-6:
+        imagem_base = ajustar_saturacao(imagem_base, fator=float(fator_saturacao))
+    if abs(float(fator_temperatura)) > 1e-6:
+        imagem_base = ajustar_temperatura(imagem_base, intensidade=float(fator_temperatura))
+    if abs(float(fator_nitidez)) > 1e-6:
+        imagem_base = ajustar_nitidez(imagem_base, intensidade=float(fator_nitidez))
 
     # 6) Cópia para exibição (vamos desenhar nela e é ela que será retornada)
     imagem_exibicao = imagem_base.copy()
@@ -416,7 +490,18 @@ def processar_imagem(
     return img_b64, ovos_info
 
 
-def processar_imagem_por_url(url: str, timeout: int = 20, fator_elipse=(0.85, 0.75), usar_fitellipse=True, fator_v_backup: float = 1.0):
+def processar_imagem_por_url(
+    url: str,
+    timeout: int = 20,
+    fator_elipse=(0.85, 0.75),
+    usar_fitellipse=True,
+    fator_v_backup: float = 1.0,
+    fator_contraste: float = 1.0,
+    fator_saturacao: float = 1.0,
+    ev_exposicao: float = 0.0,
+    fator_nitidez: float = 0.0,
+    fator_temperatura: float = 0.0,
+):
     """Baixa a imagem de URL e processa com os mesmos parâmetros."""
     resp = requests.get(url, timeout=timeout)
     resp.raise_for_status()
@@ -424,5 +509,10 @@ def processar_imagem_por_url(url: str, timeout: int = 20, fator_elipse=(0.85, 0.
         io.BytesIO(resp.content),
         fator_elipse=fator_elipse,
         usar_fitellipse=usar_fitellipse,
-        fator_v_backup=fator_v_backup
+        fator_v_backup=fator_v_backup,
+        fator_contraste=fator_contraste,
+        fator_saturacao=fator_saturacao,
+        ev_exposicao=ev_exposicao,
+        fator_nitidez=fator_nitidez,
+        fator_temperatura=fator_temperatura,
     )
