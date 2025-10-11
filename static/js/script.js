@@ -21,17 +21,25 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // Controle do fator de claridade (fator_v_backup)
-  const fatorInput = document.getElementById("fator-v-backup");
-  const fatorValue = document.getElementById("fator-v-backup-value");
-
-  if (fatorInput && fatorValue) {
-    // valor inicial
-    fatorValue.innerText = fatorInput.value;
-
-    // atualiza dinamicamente
-    fatorInput.addEventListener("input", function () {
-      fatorValue.innerText = this.value;
-    });
-  }
+  // Atualização dinâmica dos valores numéricos dos ajustes
+  document.querySelectorAll('[data-value-for]').forEach(function (span) {
+    const targetId = span.getAttribute('data-value-for');
+    if (!targetId) return;
+    const input = document.getElementById(targetId);
+    if (!input) return;
+    const decimals = parseInt(input.dataset.decimals || '2', 10);
+    const format = function (value) {
+      if (Number.isFinite(value)) {
+        return value.toFixed(decimals);
+      }
+      return '--';
+    };
+    const update = function () {
+      const val = parseFloat(input.value);
+      span.textContent = format(val);
+    };
+    update();
+    input.addEventListener('input', update);
+    input.addEventListener('change', update);
+  });
 });

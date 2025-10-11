@@ -28,6 +28,15 @@ CALIBRATED_DIR = os.path.join(STATIC_DIR, 'calibrated')
 for d in (STATIC_DIR, CONFIG_DIR, UPLOADS_DIR, OUTPUT_DIR, CALIBRATED_DIR):
     os.makedirs(d, exist_ok=True)
 
+DEFAULT_AJUSTES = {
+    "fator_v_backup": 1.0,
+    "fator_contraste": 1.0,
+    "fator_saturacao": 1.0,
+    "ev_exposicao": 0.0,
+    "fator_nitidez": 0.0,
+    "fator_temperatura": 0.0,
+}
+
 def _to_url(path_abs: str) -> str:
     """Converte caminho absoluto para URL relativa ao root do app (prefixada com '/')."""
     rel = os.path.relpath(path_abs, start=PROJECT_ROOT).replace("\\", "/")
@@ -68,18 +77,30 @@ def index():
     """
     imagem_b64 = None
     ovos_info = None
+    ajustes = DEFAULT_AJUSTES.copy()
 
     if request.method == 'POST' and 'imagem' in request.files:
         file = request.files['imagem']
         if file and file.filename:
-            # lê fator_v_backup do form (padrão 1.0)
-            raw_val = (request.form.get('fator_v_backup') or '').strip()
-            try:
-                fator_v_backup = float(raw_val) if raw_val else 1.0
-            except Exception:
-                fator_v_backup = 1.0
-            # clampa para evitar valores extremos (ajuste se quiser)
-            fator_v_backup = max(0.2, min(1.5, fator_v_backup))
+            def _parse_float(nome, default, minimo=None, maximo=None):
+                raw = (request.form.get(nome) or '').strip()
+                try:
+                    valor = float(raw) if raw else default
+                except Exception:
+                    valor = default
+                if minimo is not None:
+                    valor = max(minimo, valor)
+                if maximo is not None:
+                    valor = min(maximo, valor)
+                ajustes[nome] = valor
+                return valor
+
+            fator_v_backup = _parse_float('fator_v_backup', 1.0, 0.2, 3.0)
+            fator_contraste = _parse_float('fator_contraste', 1.0, 0.2, 3.0)
+            fator_saturacao = _parse_float('fator_saturacao', 1.0, 0.0, 3.0)
+            ev_exposicao = _parse_float('ev_exposicao', 0.0, -5.0, 5.0)
+            fator_nitidez = _parse_float('fator_nitidez', 0.0, -1.0, 2.0)
+            fator_temperatura = _parse_float('fator_temperatura', 0.0, -1.0, 1.0)
 
             file.stream.seek(0)
             # passa o fator_v_backup para o pipeline
@@ -87,7 +108,12 @@ def index():
                 file,
                 fator_elipse=(0.85, 0.75),
                 usar_fitellipse=True,
-                fator_v_backup=fator_v_backup
+                fator_v_backup=fator_v_backup,
+                fator_contraste=fator_contraste,
+                fator_saturacao=fator_saturacao,
+                ev_exposicao=ev_exposicao,
+                fator_nitidez=fator_nitidez,
+                fator_temperatura=fator_temperatura,
             )
             # normaliza cada ovo (se veio lista de dicts)
             if ovos_info:
@@ -100,6 +126,7 @@ def index():
         # processamento
         imagem=imagem_b64,
         ovos_info=ovos_info,
+        ajustes=ajustes,
         # calibração (vazio por padrão)
         img_url=None, ann_url=None, warp_url=None,
         warp_debug_url=None, warp_labels_url=None,
@@ -118,7 +145,7 @@ def calibrar():
     f = request.files.get('image')
     if not f or not f.filename:
         # volta ao index mantendo tudo vazio
-        return render_template('index.html')
+        return render_template('index.html', ajustes=DEFAULT_AJUSTES.copy())
 
     filename = secure_filename(f.filename)
     upload_path = os.path.join(UPLOADS_DIR, filename)
@@ -162,6 +189,7 @@ def calibrar():
         # resultados de processamento desligados nesta renderização
         "imagem": None,
         "ovos_info": None,
+        "ajustes": DEFAULT_AJUSTES.copy(),
         "calib_exists": have_saved,
     }
 
