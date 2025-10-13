@@ -149,21 +149,78 @@
             {% set TODAS = ovo.todas_cores or ovo.top_cores or [] %}
             {% set PREVIEW = TODAS[:8] %}
 
+            {% set TOP5 = TODAS[:5] %}
+            {% set total_top5 = TOP5 | sum(attribute='perc') %}
+            {% set restante = (100.0 - total_top5) if (100.0 - total_top5) > 0 else 0.0 %}
+            {% set rgb_display = RGB and 'R:{:>3} G:{:>3} B:{:>3}'.format(RGB[0], RGB[1], RGB[2]) or '-' %}
+            {% set lab_display = LAB and 'L:{:.2f} a:{:.2f} b:{:.2f}'.format(LAB[0], LAB[1], LAB[2]) or '-' %}
+            {% set lch_display = LCH and 'L:{:.2f} C:{:.2f} h:{:.2f}'.format(LCH[0], LCH[1], LCH[2]) or '-' %}
+
             <div class="ovo-card">
-              <span class="cor-box" style="background: {{ HEX }}"></span>
+              <span class="cor-box" style="background: {{ HEX }}" title="Cor média da área delimitada"></span>
               <div class="ovo-info">
-                <h4>Ovo {{ NUM }}</h4>
-                <div class="field"><strong>Centro:</strong> {{ CTR }}</div>
-                <div class="field"><strong>Orientação:</strong> {{ ORI }}</div>
-                <div class="field"><strong>RGB:</strong> {{ RGB }}</div>
-                <div class="field"><strong>HEX:</strong> {{ HEX }}</div>
-                <div class="field"><strong>LAB:</strong> {{ LAB }}</div>
-                <div class="field"><strong>LCH:</strong> {{ LCH }}</div>
-                <div class="field"><strong>XYZ:</strong> {{ XYZ }}</div>
-                <div class="field"><strong>CMYK:</strong> {{ CMYK }}</div>
-                <div class="field"><strong>ACES:</strong> {{ ACES }}</div>
-                <div class="field"><strong>ACEScg:</strong> {{ ACEScg }}</div>
-                <div class="field"><strong>Linear sRGB:</strong> {{ LINSRGB }}</div>
+                <div class="ovo-header">
+                  <h4>Ovo {{ NUM }}</h4>
+                  <span class="ovo-tag">Área delimitada analisada</span>
+                </div>
+
+                <div class="media-grid" role="group" aria-label="Médias de cor da área delimitada">
+                  <div class="media-metric">
+                    <span class="metric-label">Média RGB</span>
+                    <span class="metric-value">{{ rgb_display }}</span>
+                  </div>
+                  <div class="media-metric">
+                    <span class="metric-label">Média LAB</span>
+                    <span class="metric-value">{{ lab_display }}</span>
+                  </div>
+                  <div class="media-metric">
+                    <span class="metric-label">Média LCH</span>
+                    <span class="metric-value">{{ lch_display }}</span>
+                  </div>
+                </div>
+
+                <div class="ovo-meta-grid">
+                  <div class="field"><strong>Centro:</strong> {{ CTR }}</div>
+                  <div class="field"><strong>Orientação:</strong> {{ ORI }}</div>
+                  <div class="field"><strong>HEX:</strong> {{ HEX }}</div>
+                  <div class="field"><strong>XYZ:</strong> {{ XYZ }}</div>
+                  <div class="field"><strong>CMYK:</strong> {{ CMYK }}</div>
+                  <div class="field"><strong>ACES:</strong> {{ ACES }}</div>
+                  <div class="field"><strong>ACEScg:</strong> {{ ACEScg }}</div>
+                  <div class="field"><strong>Linear sRGB:</strong> {{ LINSRGB }}</div>
+                </div>
+
+                {% if TOP5 %}
+                  <div class="mini-hist">
+                    <div>
+                      <strong>Mini-histograma das 5 cores predominantes</strong>
+                      <p class="hist-legend">Swatches, barras e porcentagens representam a fração da área delimitada ocupada por cada cor.</p>
+                    </div>
+                    <div class="hist-list">
+                      {% for c in TOP5 %}
+                        <div class="hist-item">
+                          <span class="hist-swatch" style="background: {{ c.hex }}" title="{{ c.hex }}"></span>
+                          <div class="hist-bar" aria-hidden="true">
+                            <div class="hist-bar-fill" style="width: {{ '%.4f' % c.perc }}%; background: {{ c.hex }};"></div>
+                          </div>
+                          <span class="hist-label">{{ '%0.2f' % c.perc }}%</span>
+                        </div>
+                      {% endfor %}
+                    </div>
+                    <div class="palette-wrapper">
+                      <div class="palette-bar" aria-hidden="true">
+                        {% for c in TOP5 %}
+                          <span class="palette-segment" style="width: {{ '%.4f' % c.perc }}%; background: {{ c.hex }};" title="{{ c.hex }} — {{ '%0.2f' % c.perc }}%"></span>
+                        {% endfor %}
+                        {% if restante > 0.05 %}
+                          <span class="palette-segment palette-outros" style="width: {{ '%.4f' % restante }}%;" title="Outras cores — {{ '%0.2f' % restante }}%"></span>
+                        {% endif %}
+                      </div>
+                      <div class="palette-legend">Faixa acumulada das 5 cores predominantes{% if restante > 0.05 %} (cinza indica demais cores){% endif %}.</div>
+                    </div>
+                    <div class="hist-total">Top 5 somam {{ '%0.2f' % total_top5 }}% da área delimitada. Total analisado: 100% da área.</div>
+                  </div>
+                {% endif %}
 
                 {% if PREVIEW %}
                   <div class="field" style="margin-top:10px;">

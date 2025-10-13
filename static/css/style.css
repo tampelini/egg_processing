@@ -172,3 +172,161 @@ button:hover { background: var(--primary-hover); }
 }
 .field { margin: 2px 0; }
 .field strong { color: #e5e5e5; }
+
+.ovo-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ovo-tag {
+  background: rgba(207, 216, 255, 0.1);
+  border: 1px solid rgba(207, 216, 255, 0.2);
+  color: #e0e8ff;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.media-grid {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+@media (min-width: 540px) {
+  .media-grid {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+}
+
+.media-metric {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metric-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.metric-value {
+  font-variant-numeric: tabular-nums;
+  font-family: "SFMono-Regular", "JetBrains Mono", Consolas, monospace;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.ovo-meta-grid {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+@media (min-width: 620px) {
+  .ovo-meta-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+}
+
+.mini-hist {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.mini-hist strong {
+  color: #d5dcff;
+}
+
+.hist-legend {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 2px 0 0;
+}
+
+.hist-list {
+  display: grid;
+  gap: 10px;
+}
+
+.hist-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.hist-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2) inset;
+}
+
+.hist-bar {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.hist-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.hist-label {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+
+.palette-wrapper {
+  display: grid;
+  gap: 6px;
+}
+
+.palette-bar {
+  display: flex;
+  height: 20px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.palette-segment {
+  display: block;
+  height: 100%;
+}
+
+.palette-outros {
+  background: repeating-linear-gradient(135deg, rgba(255,255,255,0.2) 0, rgba(255,255,255,0.2) 6px, rgba(255,255,255,0.05) 6px, rgba(255,255,255,0.05) 12px);
+}
+
+.palette-legend {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.hist-total {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
