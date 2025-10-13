@@ -126,7 +126,13 @@
       <div class="result">
         {% if imagem %}
           <h3>Imagem processada</h3>
-          <img src="data:image/png;base64,{{ imagem }}" alt="Resultado do processamento de ovos" />
+          <div class="image-highlight-wrapper">
+            <img id="processed-image" class="highlight-base" src="data:image/png;base64,{{ imagem }}" alt="Resultado do processamento de ovos" />
+            <img id="highlight-overlay" class="highlight-overlay" src="" alt="" aria-hidden="true" />
+          </div>
+          {% if ovos_info %}
+            <p class="highlight-hint">Passe o mouse ou foque uma cor para destacar os pixels correspondentes na imagem.</p>
+          {% endif %}
         {% endif %}
 
         {% if ovos_info %}
@@ -155,6 +161,17 @@
                 <h4>Ovo {{ NUM }}</h4>
                 <div class="field"><strong>Centro:</strong> {{ CTR }}</div>
                 <div class="field"><strong>Orientação:</strong> {{ ORI }}</div>
+                <div class="field media-field">
+                  <strong>Cor média:</strong>
+                  {% set MEDIA_OVERLAY = ovo.mask_overlay %}
+                  <span class="media-chip" {% if MEDIA_OVERLAY %}data-overlay="{{ MEDIA_OVERLAY }}" tabindex="0"{% endif %}>
+                    <span class="media-swatch" style="background: {{ HEX }}"></span>
+                    <span class="media-text">
+                      <span class="media-hex">{{ HEX }}</span>
+                      <span class="media-rgb">{{ RGB }}</span>
+                    </span>
+                  </span>
+                </div>
                 <div class="field"><strong>RGB:</strong> {{ RGB }}</div>
                 <div class="field"><strong>HEX:</strong> {{ HEX }}</div>
                 <div class="field"><strong>LAB:</strong> {{ LAB }}</div>
@@ -171,7 +188,7 @@
                   </div>
                   <div class="top-cores">
                     {% for c in PREVIEW %}
-                      <div class="cor-item">
+                      <div class="cor-item" {% if c.overlay %}data-overlay="{{ c.overlay }}" tabindex="0"{% endif %}>
                         <span class="cor-swatch" style="background: {{ c.hex }}"></span>
                         <div class="cor-meta">
                           <div class="line"><strong>{{ c.hex }}</strong> — {{ '%0.2f' % c.perc }}%</div>
@@ -188,7 +205,7 @@
                     <summary><strong>Todas as cores</strong> ({{ TODAS|length }} entradas)</summary>
                     <div class="top-cores" style="margin-top:8px;">
                       {% for c in TODAS %}
-                        <div class="cor-item">
+                        <div class="cor-item" {% if c.overlay %}data-overlay="{{ c.overlay }}" tabindex="0"{% endif %}>
                           <span class="cor-swatch" style="background: {{ c.hex }}"></span>
                           <div class="cor-meta">
                             <div class="line"><strong>{{ c.hex }}</strong> — {{ '%0.4f' % c.perc }}%</div>

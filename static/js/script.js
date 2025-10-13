@@ -42,4 +42,50 @@ document.addEventListener("DOMContentLoaded", function () {
     input.addEventListener('input', update);
     input.addEventListener('change', update);
   });
+
+  // Interação de destaque das cores
+  const highlightOverlay = document.getElementById('highlight-overlay');
+  const highlightContainer = document.querySelector('.image-highlight-wrapper');
+  let currentOverlayElement = null;
+
+  const showOverlay = (b64, el) => {
+    if (!highlightOverlay || !b64) return;
+    currentOverlayElement = el;
+    const dataUrl = `data:image/png;base64,${b64}`;
+    if (highlightOverlay.src !== dataUrl) {
+      highlightOverlay.src = dataUrl;
+    }
+    highlightOverlay.classList.add('active');
+  };
+
+  const clearOverlay = (el) => {
+    if (!highlightOverlay) return;
+    if (el && currentOverlayElement && el !== currentOverlayElement) {
+      return;
+    }
+    currentOverlayElement = null;
+    highlightOverlay.classList.remove('active');
+    highlightOverlay.removeAttribute('src');
+  };
+
+  const bindOverlayListeners = (element) => {
+    if (!element) return;
+    const overlayData = element.getAttribute('data-overlay');
+    if (!overlayData) return;
+    const show = () => showOverlay(overlayData, element);
+    const hide = () => clearOverlay(element);
+    element.addEventListener('mouseenter', show);
+    element.addEventListener('focus', show);
+    element.addEventListener('mouseleave', hide);
+    element.addEventListener('blur', hide);
+  };
+
+  document.querySelectorAll('.cor-item[data-overlay]').forEach(bindOverlayListeners);
+  document.querySelectorAll('.media-chip[data-overlay]').forEach(bindOverlayListeners);
+
+  if (highlightContainer) {
+    highlightContainer.addEventListener('mouseleave', () => {
+      clearOverlay(currentOverlayElement);
+    });
+  }
 });

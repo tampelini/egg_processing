@@ -205,6 +205,94 @@ def extrair_cores_predominantes_hist(img_rgb: np.ndarray,
         })
     return resultado
 
+
+def gerar_overlay_cor(
+    base_rgb: np.ndarray,
+    mask: np.ndarray,
+    cor_rgb: tuple[int, int, int],
+    *,
+    destaque_alpha: int = 210,
+    contexto_alpha: int = 110,
+    contexto_bgr: tuple[int, int, int] = (25, 25, 25),
+) -> str | None:
+    """Gera uma imagem PNG (base64) destacando os pixels de ``cor_rgb`` dentro da máscara."""
+
+    if base_rgb.ndim != 3 or base_rgb.shape[2] != 3:
+        return None
+
+    h, w = mask.shape
+    if base_rgb.shape[:2] != mask.shape:
+        return None
+
+    contexto_alpha = int(np.clip(contexto_alpha, 0, 255))
+    destaque_alpha = int(np.clip(destaque_alpha, 0, 255))
+    overlay = np.zeros((h, w, 4), dtype=np.uint8)
+
+    if contexto_alpha > 0:
+        overlay[mask > 0] = (
+            contexto_bgr[0],
+            contexto_bgr[1],
+            contexto_bgr[2],
+            contexto_alpha,
+        )
+
+    r, g, b = cor_rgb
+    selecao = (mask > 0)
+    selecao &= base_rgb[:, :, 0] == r
+    selecao &= base_rgb[:, :, 1] == g
+    selecao &= base_rgb[:, :, 2] == b
+
+    if not np.any(selecao):
+        # Nada selecionado: ainda assim marcamos toda a máscara com a cor média
+        selecao = mask > 0
+
+    overlay[selecao] = (
+        np.uint8(b),
+        np.uint8(g),
+        np.uint8(r),
+        destaque_alpha,
+    )
+
+    if not np.any(overlay[:, :, 3]):
+        return None
+
+    ok, buf = cv2.imencode(".png", overlay)
+    if not ok:
+        return None
+    return base64.b64encode(buf).decode("utf-8")
+
+
+def gerar_overlay_mascara(
+    mask: np.ndarray,
+    cor_rgb: tuple[int, int, int],
+    *,
+    alpha: int = 170,
+) -> str | None:
+    """Gera uma máscara colorida em PNG (base64) usando ``cor_rgb`` em toda a área do ovo."""
+
+    if mask.ndim != 2:
+        return None
+
+    h, w = mask.shape
+    overlay = np.zeros((h, w, 4), dtype=np.uint8)
+
+    if not np.any(mask):
+        return None
+
+    r, g, b = cor_rgb
+    alpha = int(np.clip(alpha, 0, 255))
+    overlay[mask > 0] = (
+        np.uint8(b),
+        np.uint8(g),
+        np.uint8(r),
+        alpha,
+    )
+
+    ok, buf = cv2.imencode(".png", overlay)
+    if not ok:
+        return None
+    return base64.b64encode(buf).decode("utf-8")
+
 # ---------------------------
 # Leitura de imagem + Landscape
 # ---------------------------
@@ -407,6 +495,20 @@ def processar_imagem(
 
             todas_cores = extrair_cores_predominantes_hist(backup_rgb, mask, top_n=None)
 
+            # Overlays visuais (cor média + top cores)
+            mean_overlay = gerar_overlay_mascara(mask, rgb)
+
+            max_preview = 8
+            enriched_cores = []
+            for idx, cor_info in enumerate(todas_cores):
+                cor_dict = dict(cor_info)
+                if idx < max_preview:
+                    overlay_b64 = gerar_overlay_cor(backup_rgb, mask, cor_dict["rgb"])
+                    if overlay_b64:
+                        cor_dict["overlay"] = overlay_b64
+                enriched_cores.append(cor_dict)
+            todas_cores = enriched_cores
+
             # Espaços de cor (da média)
             hexval = rgb_to_hex(rgb)
             cmyk = rgb_to_cmyk(rgb)
@@ -434,7 +536,7 @@ def processar_imagem(
 
             orien = 'Horizontal' if eixo_x >= eixo_y * 1.1 else ('Vertical' if eixo_y >= eixo_x * 1.1 else 'Indefinido')
 
-            preview = todas_cores[:8]
+            preview = todas_cores[:max_preview]
             top_cores_preview_text = ", ".join([f"{c['hex']} ({c['perc']:.1f}%) — {c['count']} px" for c in preview])
 
             info = {
@@ -453,7 +555,8 @@ def processar_imagem(
                 "linsrgb": tuple(map(float, linsrgb)),
                 "todas_cores": todas_cores,
                 "top_cores_preview_text": top_cores_preview_text,
-                "ellipse_angle_deg": angle_deg
+                "ellipse_angle_deg": angle_deg,
+                "mask_overlay": mean_overlay,
             }
 
             # ===== Anotações visuais — sempre na imagem_exibicao (que já tem fator_v aplicado) =====
