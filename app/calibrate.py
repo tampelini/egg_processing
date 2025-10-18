@@ -280,6 +280,19 @@ def apply_saved_calibration(image_path: str, config_dir: str, save_path: str):
         raise RuntimeError("Não consegui abrir a imagem para aplicar a calibração.")
     M = _load_calibration(config_dir)
     corrected = _apply_color_matrix(image_bgr, M)
+
+    # Se a paleta estiver presente, remove a área correspondente após aplicar a calibração
+    try:
+        corners, ids = _detect_markers(image_bgr)
+        quad = _order_corners_by_expected(corners, ids)
+    except RuntimeError:
+        quad = None
+
+    if quad is not None:
+        mask = np.zeros(corrected.shape[:2], dtype=np.uint8)
+        cv2.fillPoly(mask, [quad.astype(np.int32)], 255)
+        corrected[mask == 255] = 0
+
     cv2.imwrite(str(save_path), corrected, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
     return save_path
 
@@ -389,13 +402,28 @@ def build_calibration_from_image(image_path: str, config_dir: str, static_dir: s
     if image_bgr is None:
         raise RuntimeError("Não consegui abrir a imagem.")
 
-    # 1) Detecta ArUco e overlay na original
-    corners, ids = _detect_markers(image_bgr)
     output_dir = _ensure_output_dir(static_dir)
+
+    # 1) Detecta ArUco e overlay na original
+    try:
+        corners, ids = _detect_markers(image_bgr)
+        quad = _order_corners_by_expected(corners, ids)
+    except RuntimeError as exc:
+        # Não há paleta detectada: retorna contexto mínimo e deixa a imagem original ser exibida
+        return {
+            "annotated_name": None,
+            "orig_overlay_name": None,
+            "calibrated_name": None,
+            "warp_name": None,
+            "warp_debug_name": None,
+            "warp_labels_name": None,
+            "palette_detected": False,
+            "skip_reason": str(exc),
+        }
+
     orig_overlay_name = "det_aruco.png"
     _save_aruco_overlay(image_bgr, corners, ids, os.path.join(output_dir, orig_overlay_name))
 
-    quad = _order_corners_by_expected(corners, ids)
     # overlay do quadrilátero também
     vis = image_bgr.copy()
     cv2.polylines(vis, [quad.astype(np.int32)], True, (0, 255, 255), 3)
@@ -435,12 +463,18 @@ def build_calibration_from_image(image_path: str, config_dir: str, static_dir: s
     M = _solve_color_matrix(measured_rgb, target_rgb)
     corrected = _apply_color_matrix(image_bgr, M)
 
+    # remove a região da paleta da imagem calibrada (preto)
+    corrected_sem_paleta = corrected.copy()
+    mask = np.zeros(corrected_sem_paleta.shape[:2], dtype=np.uint8)
+    cv2.fillPoly(mask, [quad.astype(np.int32)], 255)
+    corrected_sem_paleta[mask == 255] = 0
+
     # 7) Salva imagem calibrada e CSV das medições
     base = os.path.basename(image_path)
     name_wo, _ = os.path.splitext(base)
     os.makedirs(calibrated_dir, exist_ok=True)
     calib_name = f"calibrated_{name_wo}.jpg"
-    cv2.imwrite(os.path.join(calibrated_dir, calib_name), corrected, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+    cv2.imwrite(os.path.join(calibrated_dir, calib_name), corrected_sem_paleta, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
 
     measured_csv = os.path.join(config_dir, f"measured_{name_wo}.csv")
     rows = [["label", "row", "col", "R", "G", "B"]]
@@ -474,4 +508,5 @@ def build_calibration_from_image(image_path: str, config_dir: str, static_dir: s
         "warp_name": warp_name,
         "warp_debug_name": warp_debug_name,
         "warp_labels_name": warp_labels_name,
+        "palette_detected": True,
     }
