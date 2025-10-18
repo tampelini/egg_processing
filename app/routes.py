@@ -1,6 +1,7 @@
 # app/routes.py
 import os
 import json
+import uuid
 from flask import Blueprint, render_template, request
 from werkzeug.utils import secure_filename
 
@@ -79,6 +80,8 @@ def index():
     ovos_info = None
     ajustes = DEFAULT_AJUSTES.copy()
 
+    auto_calibration = None
+
     if request.method == 'POST' and 'imagem' in request.files:
         file = request.files['imagem']
         if file and file.filename:
@@ -102,10 +105,50 @@ def index():
             fator_nitidez = _parse_float('fator_nitidez', 0.0, -1.0, 2.0)
             fator_temperatura = _parse_float('fator_temperatura', 0.0, -1.0, 1.0)
 
-            file.stream.seek(0)
+            filename = secure_filename(file.filename)
+            name_wo, ext = os.path.splitext(filename)
+            unique_suffix = uuid.uuid4().hex[:8]
+            unique_name = f"{name_wo}_{unique_suffix}{ext}" if ext else f"{name_wo}_{unique_suffix}"
+            upload_path = os.path.join(UPLOADS_DIR, unique_name)
+            file.save(upload_path)
+
+            imagem_para_processar = upload_path
+
+            try:
+                calib_out = build_calibration_from_image(
+                    upload_path,
+                    CONFIG_DIR,
+                    STATIC_DIR,
+                    CALIBRATED_DIR,
+                )
+                auto_calibration = {
+                    "performed": True,
+                    "palette_detected": bool(calib_out.get("palette_detected")),
+                    "skip_reason": calib_out.get("skip_reason"),
+                    "error": None,
+                    "used_image": "original",
+                    "calibrated_url": None,
+                }
+
+                if calib_out.get("palette_detected") and calib_out.get("calibrated_name"):
+                    calib_path = os.path.join(CALIBRATED_DIR, calib_out["calibrated_name"])
+                    if os.path.exists(calib_path):
+                        imagem_para_processar = calib_path
+                        auto_calibration["used_image"] = "calibrated"
+                        auto_calibration["calibrated_url"] = _to_url(calib_path)
+            except Exception as exc:
+                auto_calibration = {
+                    "performed": True,
+                    "palette_detected": False,
+                    "skip_reason": None,
+                    "error": str(exc),
+                    "used_image": "original",
+                    "calibrated_url": None,
+                }
+
             # passa o fator_v_backup para o pipeline
             imagem_b64, ovos_info = processar_imagem(
-                file,
+                imagem_para_processar,
                 fator_elipse=(0.85, 0.75),
                 usar_fitellipse=True,
                 fator_v_backup=fator_v_backup,
@@ -127,6 +170,7 @@ def index():
         imagem=imagem_b64,
         ovos_info=ovos_info,
         ajustes=ajustes,
+        auto_calibration=auto_calibration,
         # calibração (vazio por padrão)
         img_url=None, ann_url=None, warp_url=None,
         warp_debug_url=None, warp_labels_url=None,
@@ -145,7 +189,7 @@ def calibrar():
     f = request.files.get('image')
     if not f or not f.filename:
         # volta ao index mantendo tudo vazio
-        return render_template('index.html', ajustes=DEFAULT_AJUSTES.copy())
+        return render_template('index.html', ajustes=DEFAULT_AJUSTES.copy(), auto_calibration=None)
 
     filename = secure_filename(f.filename)
     upload_path = os.path.join(UPLOADS_DIR, filename)
@@ -190,6 +234,7 @@ def calibrar():
         "imagem": None,
         "ovos_info": None,
         "ajustes": DEFAULT_AJUSTES.copy(),
+        "auto_calibration": None,
         "calib_exists": have_saved,
     }
 

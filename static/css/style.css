@@ -146,6 +146,33 @@ button:hover { background: var(--primary-hover); }
   margin: 10px 0;
 }
 
+.calibration-status {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: rgba(0, 120, 215, 0.08);
+  margin-bottom: 12px;
+  color: var(--text);
+}
+
+.calibration-status p {
+  margin: 6px 0;
+}
+
+.calibration-status .success {
+  color: #7cf18d;
+  font-weight: 600;
+}
+
+.calibration-status .info {
+  color: #8fd6ff;
+}
+
+.calibration-status .warn {
+  color: #ff9f6e;
+  font-weight: 600;
+}
+
 .divider { height: 1px; background: var(--border); margin: 18px 0; }
 
 /* --- cartões de cor no estilo QUBIK3 --- */
