@@ -124,6 +124,22 @@
       </form>
 
       <div class="result">
+        {% if auto_calibration %}
+          <div class="calibration-status">
+            {% if auto_calibration.error %}
+              <p class="warn">Calibração automática falhou: {{ auto_calibration.error }}</p>
+            {% elif auto_calibration.palette_detected %}
+              <p class="success">Paleta detectada automaticamente. A imagem calibrada foi usada no processamento.</p>
+              {% if auto_calibration.calibrated_url %}
+                <p class="hint">Pré-visualize a imagem calibrada: <a href="{{ auto_calibration.calibrated_url }}" target="_blank" rel="noopener">abrir em nova aba</a>.</p>
+              {% endif %}
+            {% elif auto_calibration.skip_reason %}
+              <p class="info">Calibração automática executada, mas nenhuma paleta foi encontrada ({{ auto_calibration.skip_reason }}). A imagem original foi processada.</p>
+            {% else %}
+              <p class="info">Calibração automática executada, mas nenhuma paleta foi encontrada. A imagem original foi processada.</p>
+            {% endif %}
+          </div>
+        {% endif %}
         {% if imagem %}
           <h3>Imagem processada</h3>
           <img src="data:image/png;base64,{{ imagem }}" alt="Resultado do processamento de ovos" />
