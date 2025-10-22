@@ -1,11 +1,19 @@
 # processamento.py
+import base64
+import csv
+import io
+import json
+import logging
+import os
+import uuid
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
+
 import cv2
 import numpy as np
-import io
-import base64
-import logging
 import requests
 from skimage.color import rgb2lab, rgb2xyz
+
 import colour
 
 # =====[ Suporte opcional a HEIC/HEIF via pillow-heif ]=====
@@ -18,6 +26,505 @@ except Exception:
 # ==========================================================
 
 logging.basicConfig(level=logging.INFO)
+
+# Diretórios padrão relativos ao projeto
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(APP_DIR)
+DEFAULT_STATIC_DIR = os.path.join(PROJECT_ROOT, "static")
+DEFAULT_CONFIG_DIR = os.path.join(PROJECT_ROOT, "config")
+DEFAULT_OUTPUT_DIR = os.path.join(DEFAULT_STATIC_DIR, "output")
+DEFAULT_CALIBRATED_DIR = os.path.join(DEFAULT_STATIC_DIR, "calibrated")
+
+# ===================== Configurações da calibração =====================
+
+# IDs esperados dos 4 ArUco (dicionário 4x4_50) nos cantos da paleta
+# TL/TR/BL/BR = Top-Left / Top-Right / Bottom-Left / Bottom-Right
+EXPECTED_IDS = {"TL": 10, "TR": 11, "BL": 12, "BR": 13}
+
+# Layout da paleta: 12 linhas × 2 colunas (24 patches)
+ROWS, COLS = 12, 2
+
+# Tamanho do warp (paleta retificada)
+WARP_W, WARP_H = 800, 1600
+
+# Margens e espaçamentos relativos dentro do warp
+MARGIN_X, MARGIN_Y = 0.14, 0.05
+GAP_X, GAP_Y = 0.06, 0.02
+
+# Janela de amostragem (pixels) para média RGB dentro de cada patch
+SAMPLE_WIN = 34
+
+
+# ===================== Utilidades da calibração =====================
+
+
+def _empty_auto_calibration(performed: bool = False) -> Dict[str, Optional[str]]:
+    return {
+        "performed": performed,
+        "palette_detected": False,
+        "skip_reason": None,
+        "error": None,
+        "used_image": "original",
+        "calibrated_path": None,
+        "calibrated_name": None,
+        "annotated_path": None,
+        "warp_path": None,
+        "warp_debug_path": None,
+        "warp_labels_path": None,
+        "measured_csv_path": None,
+    }
+
+
+def _ensure_dirs(*dirs: str) -> None:
+    for d in dirs:
+        if d:
+            os.makedirs(d, exist_ok=True)
+
+
+def _save_csv(path: str, rows: List[List]) -> None:
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerows(rows)
+
+
+def _aruco_detector():
+    if not hasattr(cv2, "aruco"):
+        raise RuntimeError(
+            "OpenCV ArUco não disponível. Instale opencv-contrib-python."
+        )
+    aruco = cv2.aruco
+    if hasattr(aruco, "ArucoDetector"):
+        dictionary = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
+        params = aruco.DetectorParameters()
+        params.adaptiveThreshWinSizeMin = 3
+        params.adaptiveThreshWinSizeMax = 33
+        params.adaptiveThreshWinSizeStep = 10
+        params.cornerRefinementMethod = aruco.CORNER_REFINE_SUBPIX
+        detector = aruco.ArucoDetector(dictionary, params)
+        return detector, dictionary
+    dictionary = aruco.Dictionary_get(aruco.DICT_4X4_50)
+    params = aruco.DetectorParameters_create()
+    params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
+    return (dictionary, params), dictionary
+
+
+def _detect_markers(image_bgr: np.ndarray):
+    det, dictn = _aruco_detector()
+    if isinstance(det, tuple):
+        dictionary, params = det
+        corners, ids, _ = cv2.aruco.detectMarkers(
+            image_bgr, dictionary, parameters=params
+        )
+    else:
+        corners, ids, _ = det.detectMarkers(image_bgr)
+    if ids is None or len(ids) < 4:
+        raise RuntimeError(
+            "Não encontrei marcadores ArUco suficientes (precisa de 4)."
+        )
+    return corners, ids.flatten().tolist()
+
+
+def _order_corners_by_expected(corners, ids: List[int]) -> np.ndarray:
+    id_to_corner = {idv: c.reshape(-1, 2) for c, idv in zip(corners, ids)}
+    try:
+        tl = id_to_corner[EXPECTED_IDS["TL"]][0]
+        tr = id_to_corner[EXPECTED_IDS["TR"]][1]
+        br = id_to_corner[EXPECTED_IDS["BR"]][2]
+        bl = id_to_corner[EXPECTED_IDS["BL"]][3]
+    except KeyError:
+        raise RuntimeError(
+            "IDs esperados (10,11,12,13) não foram encontrados."
+        )
+    quad = np.array([tl, tr, br, bl], dtype=np.float32)
+    return quad
+
+
+def _compute_homography_and_warp(image_bgr: np.ndarray, quad_src: np.ndarray):
+    dst = np.array(
+        [
+            [0, 0],
+            [WARP_W - 1, 0],
+            [WARP_W - 1, WARP_H - 1],
+            [0, WARP_H - 1],
+        ],
+        dtype=np.float32,
+    )
+    H = cv2.getPerspectiveTransform(quad_src, dst)
+    warped = cv2.warpPerspective(image_bgr, H, (WARP_W, WARP_H))
+    return warped, H
+
+
+def _grid_centers_parametric() -> List[Tuple[float, float]]:
+    xs, ys = [], []
+    cell_w = (1.0 - 2 * MARGIN_X - (COLS - 1) * GAP_X) / COLS
+    cell_h = (1.0 - 2 * MARGIN_Y - (ROWS - 1) * GAP_Y) / ROWS
+    for r in range(ROWS):
+        cy = MARGIN_Y + r * (cell_h + GAP_Y) + cell_h / 2
+        ys.append(cy)
+    for c in range(COLS):
+        cx = MARGIN_X + c * (cell_w + GAP_X) + cell_w / 2
+        xs.append(cx)
+    centers: List[Tuple[float, float]] = []
+    for r in range(ROWS):
+        for c in range(COLS):
+            centers.append((xs[c], ys[r]))
+    return centers
+
+
+def _load_centers_from_csv(config_dir: str) -> Optional[List[Tuple[float, float]]]:
+    path = os.path.join(config_dir, "patch_centers.csv")
+    if not os.path.exists(path):
+        return None
+    out: List[Tuple[float, float]] = []
+    with open(path, "r", encoding="utf-8") as f:
+        rd = csv.DictReader(f)
+        for row in rd:
+            x = float(row["x"])
+            y = float(row["y"])
+            out.append((x, y))
+    if len(out) != ROWS * COLS:
+        raise RuntimeError(
+            f"patch_centers.csv deve ter {ROWS * COLS} linhas; tem {len(out)}."
+        )
+    return out
+
+
+def _centers_px(centers_norm: List[Tuple[float, float]]) -> List[Tuple[int, int]]:
+    return [
+        (int(nx * WARP_W), int(ny * WARP_H))
+        for (nx, ny) in centers_norm
+    ]
+
+
+def _read_rgb_at_points(
+    image_bgr: np.ndarray,
+    points: List[Tuple[int, int]],
+    win: int = SAMPLE_WIN,
+) -> np.ndarray:
+    half = win // 2
+    h, w = image_bgr.shape[:2]
+    rgbs = []
+    for (x, y) in points:
+        x0, x1 = max(0, x - half), min(w, x + half + 1)
+        y0, y1 = max(0, y - half), min(h, y + half + 1)
+        patch = image_bgr[y0:y1, x0:x1, :]
+        if patch.size == 0:
+            rgbs.append([0, 0, 0])
+        else:
+            mean_bgr = patch.reshape(-1, 3).mean(axis=0)
+            r, g, b = mean_bgr[2], mean_bgr[1], mean_bgr[0]
+            rgbs.append([r, g, b])
+    return np.array(rgbs, dtype=np.float32)
+
+
+def _save_aruco_overlay(
+    image_bgr: np.ndarray,
+    corners,
+    ids: List[int],
+    out_path: str,
+) -> None:
+    vis = image_bgr.copy()
+    aruco = cv2.aruco
+    ids_arr = np.array(ids).reshape(-1, 1)
+    aruco.drawDetectedMarkers(vis, corners, ids_arr)
+    try:
+        quad = _order_corners_by_expected(corners, ids)
+        cv2.polylines(vis, [quad.astype(np.int32)], True, (0, 255, 255), 3)
+    except Exception:
+        pass
+    cv2.imwrite(out_path, vis)
+
+
+def _draw_sampling_debug(
+    warped: np.ndarray,
+    centers_px: List[Tuple[int, int]],
+    labels: List[str],
+    win: int = SAMPLE_WIN,
+    out_dbg: Optional[str] = None,
+    out_lbl: Optional[str] = None,
+) -> None:
+    half = win // 2
+    dbg = warped.copy()
+    for (x, y) in centers_px:
+        cv2.rectangle(
+            dbg, (x - half, y - half), (x + half, y + half), (0, 255, 0), 2
+        )
+        cv2.circle(dbg, (x, y), 3, (0, 0, 255), -1)
+    if out_dbg:
+        cv2.imwrite(out_dbg, dbg)
+
+    lbl = warped.copy()
+    for (x, y), text in zip(centers_px, labels):
+        cv2.rectangle(
+            lbl, (x - half, y - half), (x + half, y + half), (0, 255, 0), 1
+        )
+        cv2.putText(
+            lbl,
+            text,
+            (x - half, y - half - 6),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            lbl,
+            text,
+            (x - half, y - half - 6),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (0, 0, 0),
+            1,
+            cv2.LINE_AA,
+        )
+    if out_lbl:
+        cv2.imwrite(out_lbl, lbl)
+
+
+def _solve_color_matrix(
+    measured: np.ndarray, target: np.ndarray
+) -> np.ndarray:
+    assert measured.shape == target.shape and measured.shape[1] == 3
+    if np.min(np.std(target, axis=0)) < 3:
+        raise RuntimeError(
+            "Targets muito pouco variados. Forneça ref_colors.csv real."
+        )
+    if np.min(np.std(measured, axis=0)) < 1:
+        raise RuntimeError(
+            "Medições quase constantes. Verifique warp/amostragem."
+        )
+
+    N = measured.shape[0]
+    A = np.hstack(
+        [measured.astype(np.float32), np.ones((N, 1), dtype=np.float32)]
+    )
+    lam = 1e-2
+    AtA = A.T @ A + lam * np.eye(4, dtype=np.float32)
+    M = np.zeros((3, 4), dtype=np.float32)
+    for ch in range(3):
+        y = target[:, ch].astype(np.float32)
+        x = np.linalg.solve(AtA, A.T @ y)
+        M[ch, :] = x
+
+    gains = np.abs(M[:, :3])
+    bias = np.abs(M[:, 3])
+    if np.any(gains < 0.05) or np.any(gains > 5) or np.any(bias > 60):
+        Mf = np.zeros_like(M)
+        for ch in range(3):
+            x = measured[:, ch]
+            y = target[:, ch]
+            a, b = np.polyfit(x, y, 1)
+            Mf[ch, :3] = [0, 0, 0]
+            Mf[ch, ch] = a
+            Mf[ch, 3] = b
+        M = Mf
+
+    return M
+
+
+def _apply_color_matrix(image_bgr: np.ndarray, M: np.ndarray) -> np.ndarray:
+    rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB).astype(np.float32)
+    H, W = rgb.shape[:2]
+    flat = rgb.reshape(-1, 3)
+    A = np.hstack([flat, np.ones((flat.shape[0], 1), dtype=np.float32)])
+    out = A @ M.T
+    out = np.clip(out, 0, 255).reshape(H, W, 3).astype(np.uint8)
+    bgr = cv2.cvtColor(out, cv2.COLOR_RGB2BGR)
+    return bgr
+
+
+def _save_calibration(config_dir: str, M: np.ndarray, meta: Dict) -> None:
+    data = {"matrix_3x4": M.tolist(), "meta": meta}
+    with open(
+        os.path.join(config_dir, "color_calibration.json"),
+        "w",
+        encoding="utf-8",
+    ) as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def _load_targets_csv(
+    config_dir: str, expected_n: int
+) -> Tuple[np.ndarray, List[str]]:
+    path = os.path.join(config_dir, "ref_colors.csv")
+    if not os.path.exists(path):
+        raise RuntimeError(
+            "ref_colors.csv não encontrado em config/. Gere a referência antes."
+        )
+    with open(path, "r", encoding="utf-8") as f:
+        rd = csv.DictReader(f)
+        fieldset = {k.strip().lower() for k in (rd.fieldnames or [])}
+        labels: List[str] = []
+        targets: List[List[float]] = []
+
+        if {"label", "row", "col", "r", "g", "b"} <= fieldset:
+            for row in rd:
+                labels.append(row["label"])
+                targets.append(
+                    [float(row["R"]), float(row["G"]), float(row["B"])]
+                )
+        elif {"row", "col", "r", "g", "b"} <= fieldset:
+            i = 1
+            for row in rd:
+                labels.append(f"P{i:02d}")
+                targets.append(
+                    [float(row["R"]), float(row["G"]), float(row["B"])]
+                )
+                i += 1
+        elif {"r", "g", "b"} <= fieldset:
+            i = 1
+            for row in rd:
+                labels.append(f"P{i:02d}")
+                targets.append(
+                    [float(row["R"]), float(row["G"]), float(row["B"])]
+                )
+                i += 1
+        else:
+            raise RuntimeError(
+                "Cabeçalho do ref_colors.csv inválido."
+            )
+
+    if len(targets) != expected_n:
+        raise RuntimeError(
+            f"ref_colors.csv contém {len(targets)} linhas, esperado {expected_n}."
+        )
+    return np.array(targets, dtype=np.float32), labels
+
+
+def _auto_calibrar_imagem(
+    image_bgr: np.ndarray,
+    *,
+    config_dir: str,
+    static_dir: str,
+    output_dir: Optional[str],
+    calibrated_dir: Optional[str],
+    source_path: Optional[str] = None,
+    save_debug: bool = True,
+) -> Tuple[np.ndarray, Dict[str, Optional[str]]]:
+    info: Dict[str, Optional[str]] = {
+        "performed": True,
+        "palette_detected": False,
+        "skip_reason": None,
+        "error": None,
+        "used_image": "original",
+        "calibrated_path": None,
+        "calibrated_name": None,
+        "annotated_path": None,
+        "warp_path": None,
+        "warp_debug_path": None,
+        "warp_labels_path": None,
+        "measured_csv_path": None,
+    }
+
+    base_image = image_bgr.copy()
+
+    try:
+        corners, ids = _detect_markers(base_image)
+        quad = _order_corners_by_expected(corners, ids)
+    except Exception as exc:  # noqa: BLE001
+        info["skip_reason"] = str(exc)
+        return image_bgr, info
+
+    info["palette_detected"] = True
+
+    try:
+        warped, _ = _compute_homography_and_warp(base_image, quad)
+        centers_from_csv = _load_centers_from_csv(config_dir)
+        centers_source = "patch_centers.csv" if centers_from_csv else "parametric_grid"
+        centers_norm = centers_from_csv or _grid_centers_parametric()
+        centers_px = _centers_px(centers_norm)
+        labels = [f"P{i:02d}" for i in range(1, ROWS * COLS + 1)]
+
+        measured_rgb = _read_rgb_at_points(warped, centers_px, win=SAMPLE_WIN)
+        target_rgb, ref_labels = _load_targets_csv(
+            config_dir, expected_n=ROWS * COLS
+        )
+        if target_rgb.shape != measured_rgb.shape:
+            raise RuntimeError(
+                "Dimensão dos alvos não bate com os patches medidos (ref_colors.csv vs amostragem)."
+            )
+
+        M = _solve_color_matrix(measured_rgb, target_rgb)
+        corrected = _apply_color_matrix(base_image, M)
+
+        corrected_sem_paleta = corrected.copy()
+        mask = np.zeros(corrected_sem_paleta.shape[:2], dtype=np.uint8)
+        cv2.fillPoly(mask, [quad.astype(np.int32)], 255)
+        corrected_sem_paleta[mask == 255] = 0
+    except Exception as exc:  # noqa: BLE001
+        info["error"] = str(exc)
+        return image_bgr, info
+
+    base_name = os.path.basename(source_path) if source_path else None
+    if not base_name:
+        base_name = f"auto_{uuid.uuid4().hex[:8]}"
+    name_wo, _ = os.path.splitext(base_name)
+
+    info["used_image"] = "calibrated"
+
+    if calibrated_dir:
+        os.makedirs(calibrated_dir, exist_ok=True)
+        calib_name = f"calibrated_{name_wo}.jpg"
+        calib_path = os.path.join(calibrated_dir, calib_name)
+        cv2.imwrite(
+            calib_path, corrected_sem_paleta, [int(cv2.IMWRITE_JPEG_QUALITY), 95]
+        )
+        info["calibrated_path"] = calib_path
+        info["calibrated_name"] = calib_name
+
+    if output_dir and save_debug:
+        os.makedirs(output_dir, exist_ok=True)
+        annotated = os.path.join(output_dir, f"{name_wo}_det_aruco.png")
+        warp_name = os.path.join(output_dir, f"{name_wo}_palette_warp.png")
+        warp_dbg = os.path.join(output_dir, f"{name_wo}_palette_warp_debug.png")
+        warp_lbl = os.path.join(output_dir, f"{name_wo}_palette_warp_labels.png")
+
+        _save_aruco_overlay(base_image, corners, ids, annotated)
+        cv2.imwrite(warp_name, warped)
+        _draw_sampling_debug(
+            warped,
+            centers_px,
+            labels,
+            win=SAMPLE_WIN,
+            out_dbg=warp_dbg,
+            out_lbl=warp_lbl,
+        )
+
+        info["annotated_path"] = annotated
+        info["warp_path"] = warp_name
+        info["warp_debug_path"] = warp_dbg
+        info["warp_labels_path"] = warp_lbl
+
+    if config_dir:
+        os.makedirs(config_dir, exist_ok=True)
+        measured_csv = os.path.join(config_dir, f"measured_{name_wo}.csv")
+        rows = [["label", "row", "col", "R", "G", "B"]]
+        idx = 0
+        for r in range(ROWS):
+            for c in range(COLS):
+                R, G, B = measured_rgb[idx].tolist()
+                label = ref_labels[idx] if idx < len(ref_labels) else labels[idx]
+                rows.append([label, r, c, R, G, B])
+                idx += 1
+        _save_csv(measured_csv, rows)
+        info["measured_csv_path"] = measured_csv
+
+        meta = {
+            "image_used": base_name,
+            "chart_layout": f"{ROWS}x{COLS}",
+            "aruco_expected_ids": EXPECTED_IDS,
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "warp_size": [WARP_W, WARP_H],
+            "margins_gap": [MARGIN_X, MARGIN_Y, GAP_X, GAP_Y],
+            "sample_win": SAMPLE_WIN,
+            "ref_colors_csv": os.path.join(config_dir, "ref_colors.csv"),
+            "measured_csv": measured_csv,
+            "centers_source": centers_source,
+        }
+        _save_calibration(config_dir, M, meta)
+
+    return corrected_sem_paleta, info
 
 # ---------------------------
 # Utilidades de cor e imagem
@@ -280,19 +787,59 @@ def processar_imagem(
     ev_exposicao: float = 0.0,
     fator_nitidez: float = 0.0,
     fator_temperatura: float = 0.0,
+    *,
+    auto_calibrar: bool = True,
+    config_dir: Optional[str] = None,
+    static_dir: Optional[str] = None,
+    output_dir: Optional[str] = None,
+    calibrated_dir: Optional[str] = None,
+    retornar_calibracao: bool = False,
+    salvar_debug_calibracao: bool = True,
 ):
     """
-    Detecta ovos usando uma cópia tratada para segmentação (imagem_trabalho),
-    mas CAPTURA as cores e RENDERIZA a saída a partir da cópia base (imagem_base),
-    que é a imagem antes de qualquer filtro + (opcionalmente) o fator_v_backup.
+    Executa o pipeline completo dos ovos.
 
-    Retorna: (img_b64, ovos_info)
+    Quando ``auto_calibrar`` estiver habilitado (padrão), o módulo tenta detectar a
+    paleta ColorChecker, aplica a matriz de correção de cor e decide automaticamente
+    se utiliza a imagem calibrada ou a original. Todo o processo de calibração é
+    interno a este arquivo para permitir sua utilização isolada em outros projetos.
+
+    Retorna: (img_b64, ovos_info) ou (img_b64, ovos_info, auto_calibracao) quando
+    ``retornar_calibracao=True``.
     """
     fx, fy = map(float, fator_elipse)
 
+    config_dir = config_dir or DEFAULT_CONFIG_DIR
+    static_dir = static_dir or DEFAULT_STATIC_DIR
+    output_dir = output_dir or DEFAULT_OUTPUT_DIR
+    calibrated_dir = calibrated_dir or DEFAULT_CALIBRATED_DIR
+
+    imagem_cv = _ler_imagem_cv(imagem)
+    auto_calibration = _empty_auto_calibration(performed=False)
+    imagem_para_processar = imagem_cv.copy()
+
+    if auto_calibrar:
+        _ensure_dirs(config_dir, static_dir)
+        try:
+            imagem_para_processar, info = _auto_calibrar_imagem(
+                imagem_cv,
+                config_dir=config_dir,
+                static_dir=static_dir,
+                output_dir=output_dir,
+                calibrated_dir=calibrated_dir,
+                source_path=imagem if isinstance(imagem, str) else None,
+                save_debug=salvar_debug_calibracao,
+            )
+            auto_calibration = info
+        except Exception as exc:  # noqa: BLE001
+            auto_calibration = _empty_auto_calibration(performed=True)
+            auto_calibration["error"] = str(exc)
+            imagem_para_processar = imagem_cv.copy()
+    else:
+        imagem_para_processar = imagem_cv.copy()
+
     # 1) Ler BGR (sem EXIF) e cortar bordas
-    imagem_trabalho = _ler_imagem_cv(imagem)       # BGR
-    imagem_trabalho = cortar_bordas_proporcional(imagem_trabalho)
+    imagem_trabalho = cortar_bordas_proporcional(imagem_para_processar.copy())
 
     # 2) CÓPIA CRUA (antes de filtros) -> vai virar nossa BASE (fonte de cores + render final)
     imagem_base = imagem_trabalho.copy()
@@ -487,6 +1034,8 @@ def processar_imagem(
     if not ok:
         raise RuntimeError("Falha ao codificar a imagem de saída em PNG.")
     img_b64 = base64.b64encode(buf.tobytes()).decode("utf-8")
+    if retornar_calibracao:
+        return img_b64, ovos_info, auto_calibration
     return img_b64, ovos_info
 
 
@@ -501,6 +1050,14 @@ def processar_imagem_por_url(
     ev_exposicao: float = 0.0,
     fator_nitidez: float = 0.0,
     fator_temperatura: float = 0.0,
+    *,
+    auto_calibrar: bool = True,
+    config_dir: Optional[str] = None,
+    static_dir: Optional[str] = None,
+    output_dir: Optional[str] = None,
+    calibrated_dir: Optional[str] = None,
+    retornar_calibracao: bool = False,
+    salvar_debug_calibracao: bool = True,
 ):
     """Baixa a imagem de URL e processa com os mesmos parâmetros."""
     resp = requests.get(url, timeout=timeout)
@@ -515,4 +1072,11 @@ def processar_imagem_por_url(
         ev_exposicao=ev_exposicao,
         fator_nitidez=fator_nitidez,
         fator_temperatura=fator_temperatura,
+        auto_calibrar=auto_calibrar,
+        config_dir=config_dir,
+        static_dir=static_dir,
+        output_dir=output_dir,
+        calibrated_dir=calibrated_dir,
+        retornar_calibracao=retornar_calibracao,
+        salvar_debug_calibracao=salvar_debug_calibracao,
     )

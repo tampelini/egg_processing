@@ -112,43 +112,8 @@ def index():
             upload_path = os.path.join(UPLOADS_DIR, unique_name)
             file.save(upload_path)
 
-            imagem_para_processar = upload_path
-
-            try:
-                calib_out = build_calibration_from_image(
-                    upload_path,
-                    CONFIG_DIR,
-                    STATIC_DIR,
-                    CALIBRATED_DIR,
-                )
-                auto_calibration = {
-                    "performed": True,
-                    "palette_detected": bool(calib_out.get("palette_detected")),
-                    "skip_reason": calib_out.get("skip_reason"),
-                    "error": None,
-                    "used_image": "original",
-                    "calibrated_url": None,
-                }
-
-                if calib_out.get("palette_detected") and calib_out.get("calibrated_name"):
-                    calib_path = os.path.join(CALIBRATED_DIR, calib_out["calibrated_name"])
-                    if os.path.exists(calib_path):
-                        imagem_para_processar = calib_path
-                        auto_calibration["used_image"] = "calibrated"
-                        auto_calibration["calibrated_url"] = _to_url(calib_path)
-            except Exception as exc:
-                auto_calibration = {
-                    "performed": True,
-                    "palette_detected": False,
-                    "skip_reason": None,
-                    "error": str(exc),
-                    "used_image": "original",
-                    "calibrated_url": None,
-                }
-
-            # passa o fator_v_backup para o pipeline
-            imagem_b64, ovos_info = processar_imagem(
-                imagem_para_processar,
+            imagem_b64, ovos_info, auto_calibration = processar_imagem(
+                upload_path,
                 fator_elipse=(0.85, 0.75),
                 usar_fitellipse=True,
                 fator_v_backup=fator_v_backup,
@@ -157,7 +122,19 @@ def index():
                 ev_exposicao=ev_exposicao,
                 fator_nitidez=fator_nitidez,
                 fator_temperatura=fator_temperatura,
+                auto_calibrar=True,
+                config_dir=CONFIG_DIR,
+                static_dir=STATIC_DIR,
+                output_dir=OUTPUT_DIR,
+                calibrated_dir=CALIBRATED_DIR,
+                retornar_calibracao=True,
             )
+            if auto_calibration:
+                calib_path = auto_calibration.get("calibrated_path")
+                if calib_path and os.path.exists(calib_path):
+                    auto_calibration["calibrated_url"] = _to_url(calib_path)
+                else:
+                    auto_calibration["calibrated_url"] = None
             # normaliza cada ovo (se veio lista de dicts)
             if ovos_info:
                 ovos_info = [_normalize_ovo(o) for o in ovos_info]
