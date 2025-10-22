@@ -1,26 +1,26 @@
 {
   "matrix_3x4": [
     [
-      0.999396562576294,
+      0.9763271808624268,
       0.0,
       0.0,
-      0.06304837018251419
+      2.284151077270508
     ],
     [
       0.0,
-      1.000152826309204,
+      0.9788509607315063,
       0.0,
-      -0.04788804054260254
+      2.461303234100342
     ],
     [
       0.0,
       0.0,
-      1.000266194343567,
-      -0.04243101179599762
+      1.003433108329773,
+      0.24016621708869934
     ]
   ],
   "meta": {
-    "image_used": "Converted_File.jpg",
+    "image_used": "calibrated_Converted_File_89ae3bdd.jpg",
     "chart_layout": "12x2",
     "aruco_expected_ids": {
       "TL": 10,
@@ -28,7 +28,7 @@
       "BL": 12,
       "BR": 13
     },
-    "created_at": "2025-08-16T00:25:52",
+    "created_at": "2025-10-22T19:53:33",
     "warp_size": [
       800,
       1600
@@ -41,7 +41,7 @@
     ],
     "sample_win": 34,
     "ref_colors_csv": "C:\\Users\\tampe\\Desktop\\egg_processing\\config\\ref_colors.csv",
-    "measured_csv": "C:\\Users\\tampe\\Desktop\\egg_processing\\config\\measured_Converted_File.csv",
+    "measured_csv": "C:\\Users\\tampe\\Desktop\\egg_processing\\config\\measured_calibrated_Converted_File_89ae3bdd.csv",
     "centers_source": "parametric_grid"
   }
 }

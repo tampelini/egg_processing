@@ -1,16 +1,18 @@
-flask~=3.1.1
-opencv-python~=4.12.0.88
-numpy~=2.2.6
-Pillow~=11.3.0
-pillow-heif
-pytest~=8.4.1
-colour-science
-scikit-image~=0.25.2
-ultralytics~=8.3.167
-pillow_heif~=1.0.0
-gunicorn
-opencv-python-headless
-
+# --- Core ---
+Flask~=3.1.1
 Werkzeug~=3.1.3
+gunicorn~=21.2.0
 requests~=2.32.4
+numpy<=2.1.3
+
+# --- Image processing ---
+opencv-python~=4.12.0.88
+opencv-contrib-python~=4.12.0.88
+scikit-image~=0.25.2
+Pillow~=10.3.0
+pillow-heif~=0.17.0
 ExifRead~=3.5.1
+
+# --- Colour science ---
+colour-science~=0.4.6
+
