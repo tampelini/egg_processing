@@ -5,31 +5,19 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="56e5a194-1cb4-40d5-836e-c10bb6a4a021" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/backup.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/backup.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/calibrate.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/calibrate.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/config/color_calibration.json" beforeDir="false" afterPath="$PROJECT_DIR$/app/config/color_calibration.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/config/ref_colors.csv" beforeDir="false" afterPath="$PROJECT_DIR$/app/config/ref_colors.csv" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.python-version" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/egg_processing.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/egg_processing.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/processamento.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/processamento.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/processamento_back.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/processamento_back.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/routes.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/routes.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/templates/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/app/templates/index.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/config/color_calibration.json" beforeDir="false" afterPath="$PROJECT_DIR$/config/color_calibration.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config/measured_Converted_File.csv" beforeDir="false" afterPath="$PROJECT_DIR$/config/measured_Converted_File.csv" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config/ref_colors.csv" beforeDir="false" afterPath="$PROJECT_DIR$/config/ref_colors.csv" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/exemple.txt" beforeDir="false" afterPath="$PROJECT_DIR$/exemple.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/palette/img/color_strip_2x12_targets.csv" beforeDir="false" afterPath="$PROJECT_DIR$/palette/img/color_strip_2x12_targets.csv" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/palette/validate_strip.py" beforeDir="false" afterPath="$PROJECT_DIR$/palette/validate_strip.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config/measured_calibrated_Converted_File_89ae3bdd.csv" beforeDir="false" afterPath="$PROJECT_DIR$/config/measured_calibrated_Converted_File_89ae3bdd.csv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config/measured_calibrated_Converted_File_d938ec0c.csv" beforeDir="false" afterPath="$PROJECT_DIR$/config/measured_calibrated_Converted_File_d938ec0c.csv" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/css/style.css" beforeDir="false" afterPath="$PROJECT_DIR$/static/css/style.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/js/script.js" beforeDir="false" afterPath="$PROJECT_DIR$/static/js/script.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/output/det_aruco.png" beforeDir="false" afterPath="$PROJECT_DIR$/static/output/det_aruco.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/output/orig_quad_overlay.png" beforeDir="false" afterPath="$PROJECT_DIR$/static/output/orig_quad_overlay.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/output/palette_warp.png" beforeDir="false" afterPath="$PROJECT_DIR$/static/output/palette_warp.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/output/palette_warp_debug.png" beforeDir="false" afterPath="$PROJECT_DIR$/static/output/palette_warp_debug.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/output/palette_warp_labels.png" beforeDir="false" afterPath="$PROJECT_DIR$/static/output/palette_warp_labels.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wsgi.py" beforeDir="false" afterPath="$PROJECT_DIR$/wsgi.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -68,26 +56,26 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "JavaScript Debug.index.html.executor": "Run",
-    "Python.processamento.executor": "Run",
-    "Python.test.executor": "Run",
-    "Python.validate_strip.executor": "Run",
-    "Python.wsgi.executor": "Run",
-    "RunOnceActivity.OpenProjectViewOnStart": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "ignore.virus.scanning.warn.message": "true",
-    "last_opened_file_path": "C:/Users/tampe/Desktop/egg_processing",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "configurable.group.build",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;JavaScript Debug.index.html.executor&quot;: &quot;Run&quot;,
+    &quot;Python.processamento.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test.executor&quot;: &quot;Run&quot;,
+    &quot;Python.validate_strip.executor&quot;: &quot;Run&quot;,
+    &quot;Python.wsgi.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/tampe/Desktop/egg_processing&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;configurable.group.build&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\tampe\Desktop\egg_processing" />
@@ -142,7 +130,7 @@
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/app/processamento.py</url>
-          <line>50</line>
+          <line>557</line>
           <option name="timeStamp" value="1" />
         </line-breakpoint>
       </breakpoints>
@@ -151,7 +139,7 @@
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/egg_processing$validate_strip.coverage" NAME="validate_strip Coverage Results" MODIFIED="1755315211140" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/util" />
     <SUITE FILE_PATH="coverage/egg_processing$test.coverage" NAME="test Coverage Results" MODIFIED="1756079482733" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/app" />
-    <SUITE FILE_PATH="coverage/egg_processing$wsgi.coverage" NAME="wsgi Coverage Results" MODIFIED="1760796937580" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/egg_processing$wsgi.coverage" NAME="wsgi Coverage Results" MODIFIED="1761175302120" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/egg_processing$processamento.coverage" NAME="processamento Coverage Results" MODIFIED="1756690600362" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/app" />
   </component>
 </project>
