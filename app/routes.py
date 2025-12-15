@@ -39,6 +39,45 @@ DEFAULT_AJUSTES = {
     "fator_temperatura": 0.0,
 }
 
+
+def _convert_heic_if_needed(path: str) -> str:
+    """Converte arquivos HEIC/HEIF em JPEG para compatibilidade ampla.
+
+    Retorna o caminho (possivelmente alterado) que deve ser usado no restante
+    do fluxo. Se o arquivo não for HEIC/HEIF, apenas devolve ``path``.
+    """
+
+    ext = os.path.splitext(path)[1].lower()
+    if ext not in {".heic", ".heif"}:
+        return path
+
+    try:
+        import pillow_heif  # type: ignore
+        from PIL import Image
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(
+            "Suporte a HEIC requer as dependências pillow-heif e Pillow instaladas."
+        ) from exc
+
+    try:
+        heif = pillow_heif.read_heif(path)
+        pil_img = Image.frombytes(heif.mode, heif.size, heif.data, "raw")
+        rgb = pil_img.convert("RGB")
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(
+            f"Não foi possível abrir o arquivo HEIC/HEIF: {exc}. "
+            "Tente reenviar como JPEG/PNG ou ativar o modo 'Formato mais compatível' no iPhone."
+        ) from exc
+
+    new_path = os.path.splitext(path)[0] + ".jpg"
+    try:
+        rgb.save(new_path, format="JPEG", quality=95)
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"Falha ao salvar conversão HEIC→JPEG: {exc}") from exc
+
+    logging.info("Arquivo HEIC convertido para JPEG: %s -> %s", path, new_path)
+    return new_path
+
 def _to_url(path_abs: str) -> str:
     """Converte caminho absoluto para URL relativa ao root do app (prefixada com '/')."""
     rel = os.path.relpath(path_abs, start=PROJECT_ROOT).replace("\\", "/")
@@ -113,6 +152,27 @@ def index():
             unique_name = f"{name_wo}_{unique_suffix}{ext}" if ext else f"{name_wo}_{unique_suffix}"
             upload_path = os.path.join(UPLOADS_DIR, unique_name)
             file.save(upload_path)
+
+            try:
+                upload_path = _convert_heic_if_needed(upload_path)
+            except Exception as exc:  # noqa: BLE001
+                logging.exception("Falha na conversão HEIC")
+                error_message = str(exc)
+                imagem_b64 = None
+                ovos_info = None
+                auto_calibration = None
+                return render_template(
+                    'index.html',
+                    imagem=imagem_b64,
+                    ovos_info=ovos_info,
+                    ajustes=ajustes,
+                    auto_calibration=auto_calibration,
+                    error_message=error_message,
+                    img_url=None, ann_url=None, warp_url=None,
+                    warp_debug_url=None, warp_labels_url=None,
+                    calibrated_url=None, cfg=None, cfg_path=None,
+                    calib_exists=has_saved_calibration(CONFIG_DIR),
+                )
 
             try:
                 imagem_b64, ovos_info, auto_calibration = processar_imagem(
@@ -196,6 +256,23 @@ def calibrar():
     filename = secure_filename(f.filename)
     upload_path = os.path.join(UPLOADS_DIR, filename)
     f.save(upload_path)
+
+    try:
+        upload_path = _convert_heic_if_needed(upload_path)
+    except Exception as exc:  # noqa: BLE001
+        logging.exception("Falha na conversão HEIC para calibração")
+        return render_template(
+            'index.html',
+            ajustes=DEFAULT_AJUSTES.copy(),
+            auto_calibration=None,
+            imagem=None,
+            ovos_info=None,
+            error_message=str(exc),
+            calib_exists=has_saved_calibration(CONFIG_DIR),
+            img_url=None, ann_url=None, warp_url=None,
+            warp_debug_url=None, warp_labels_url=None,
+            calibrated_url=None, cfg=None, cfg_path=None,
+        )
 
     use_as_ref   = bool(request.form.get('as_reference'))
     ignore_saved = bool(request.form.get('ignore_saved'))
