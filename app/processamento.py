@@ -17,12 +17,16 @@ from skimage.color import rgb2lab, rgb2xyz
 import colour
 
 # =====[ Suporte opcional a HEIC/HEIF via pillow-heif ]=====
+_PILLOW_HEIF_OK = False
+_PILLOW_HEIF_ERR = None
 try:
     import pillow_heif  # pip install pillow-heif
     from PIL import Image
+
+    pillow_heif.register_heif_opener()
     _PILLOW_HEIF_OK = True
-except Exception:
-    _PILLOW_HEIF_OK = False
+except Exception as exc:  # noqa: BLE001
+    _PILLOW_HEIF_ERR = str(exc)
 # ==========================================================
 
 logging.basicConfig(level=logging.INFO)
@@ -740,12 +744,19 @@ def _decode_image_bytes(raw: bytes) -> np.ndarray:
             rgb = np.array(pil_img.convert("RGB"))
             bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
             return bgr
-        except Exception:
-            pass
-    raise ValueError(
-        "Falha ao decodificar a imagem (possivelmente HEIC/HEIF). "
-        "Instale: pip install pillow-heif pillow"
-    )
+        except Exception as exc:  # noqa: BLE001
+            raise ValueError(
+                "Falha ao decodificar a imagem HEIC/HEIF com pillow-heif: "
+                f"{exc}. Tente reenviar como JPEG/PNG ou habilite 'Formato mais compatível' "
+                "na câmera do iPhone."
+            ) from exc
+    msg = [
+        "Falha ao decodificar a imagem (possivelmente HEIC/HEIF).",
+        "Instale pillow-heif e Pillow: pip install pillow-heif pillow.",
+    ]
+    if _PILLOW_HEIF_ERR:
+        msg.append(f"Motivo original: {_PILLOW_HEIF_ERR}")
+    raise ValueError(" ".join(msg))
 
 def _ler_imagem_cv(imagem):
     """Lê imagem em BGR (uint8) sem usar EXIF (ndarray, bytes, file-like, caminho)."""

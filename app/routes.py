@@ -1,6 +1,7 @@
 # app/routes.py
-import os
 import json
+import logging
+import os
 import uuid
 from flask import Blueprint, render_template, request
 from werkzeug.utils import secure_filename
@@ -79,6 +80,7 @@ def index():
     imagem_b64 = None
     ovos_info = None
     ajustes = DEFAULT_AJUSTES.copy()
+    error_message = None
 
     auto_calibration = None
 
@@ -112,23 +114,34 @@ def index():
             upload_path = os.path.join(UPLOADS_DIR, unique_name)
             file.save(upload_path)
 
-            imagem_b64, ovos_info, auto_calibration = processar_imagem(
-                upload_path,
-                fator_elipse=(0.85, 0.75),
-                usar_fitellipse=True,
-                fator_v_backup=fator_v_backup,
-                fator_contraste=fator_contraste,
-                fator_saturacao=fator_saturacao,
-                ev_exposicao=ev_exposicao,
-                fator_nitidez=fator_nitidez,
-                fator_temperatura=fator_temperatura,
-                auto_calibrar=True,
-                config_dir=CONFIG_DIR,
-                static_dir=STATIC_DIR,
-                output_dir=OUTPUT_DIR,
-                calibrated_dir=CALIBRATED_DIR,
-                retornar_calibracao=True,
-            )
+            try:
+                imagem_b64, ovos_info, auto_calibration = processar_imagem(
+                    upload_path,
+                    fator_elipse=(0.85, 0.75),
+                    usar_fitellipse=True,
+                    fator_v_backup=fator_v_backup,
+                    fator_contraste=fator_contraste,
+                    fator_saturacao=fator_saturacao,
+                    ev_exposicao=ev_exposicao,
+                    fator_nitidez=fator_nitidez,
+                    fator_temperatura=fator_temperatura,
+                    auto_calibrar=True,
+                    config_dir=CONFIG_DIR,
+                    static_dir=STATIC_DIR,
+                    output_dir=OUTPUT_DIR,
+                    calibrated_dir=CALIBRATED_DIR,
+                    retornar_calibracao=True,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logging.exception("Falha no processamento da imagem")
+                error_message = (
+                    "Não foi possível processar a imagem enviada. "
+                    f"Detalhes: {exc}. Tente reenviar em JPEG/PNG ou usar a opção "
+                    "'Formato mais compatível' na câmera do iPhone."
+                )
+                imagem_b64 = None
+                ovos_info = None
+                auto_calibration = None
             if auto_calibration:
                 calib_path = auto_calibration.get("calibrated_path")
                 if calib_path and os.path.exists(calib_path):
@@ -148,6 +161,7 @@ def index():
         ovos_info=ovos_info,
         ajustes=ajustes,
         auto_calibration=auto_calibration,
+        error_message=error_message,
         # calibração (vazio por padrão)
         img_url=None, ann_url=None, warp_url=None,
         warp_debug_url=None, warp_labels_url=None,
@@ -166,7 +180,18 @@ def calibrar():
     f = request.files.get('image')
     if not f or not f.filename:
         # volta ao index mantendo tudo vazio
-        return render_template('index.html', ajustes=DEFAULT_AJUSTES.copy(), auto_calibration=None)
+        return render_template(
+            'index.html',
+            ajustes=DEFAULT_AJUSTES.copy(),
+            auto_calibration=None,
+            imagem=None,
+            ovos_info=None,
+            error_message=None,
+            calib_exists=has_saved_calibration(CONFIG_DIR),
+            img_url=None, ann_url=None, warp_url=None,
+            warp_debug_url=None, warp_labels_url=None,
+            calibrated_url=None, cfg=None, cfg_path=None,
+        )
 
     filename = secure_filename(f.filename)
     upload_path = os.path.join(UPLOADS_DIR, filename)
@@ -212,6 +237,7 @@ def calibrar():
         "ovos_info": None,
         "ajustes": DEFAULT_AJUSTES.copy(),
         "auto_calibration": None,
+        "error_message": None,
         "calib_exists": have_saved,
     }
 

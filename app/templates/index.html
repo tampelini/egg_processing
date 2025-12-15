@@ -124,6 +124,9 @@
       </form>
 
       <div class="result">
+        {% if error_message %}
+          <p class="warn">{{ error_message }}</p>
+        {% endif %}
         {% if auto_calibration %}
           <div class="calibration-status">
             {% if auto_calibration.error %}
