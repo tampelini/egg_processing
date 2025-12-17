@@ -10,7 +10,8 @@ opencv-python~=4.12.0.88
 opencv-contrib-python~=4.12.0.88
 scikit-image~=0.25.2
 Pillow~=10.3.0
-pillow-heif~=0.17.0
+# Atualizado para lidar com HEIC HDR/10-bit de aparelhos mais novos (ex.: iPhone 17)
+pillow-heif~=0.20.0
 ExifRead~=3.5.1
 
 # --- Colour science ---

@@ -60,8 +60,14 @@ def _convert_heic_if_needed(path: str) -> str:
         ) from exc
 
     try:
-        heif = pillow_heif.read_heif(path)
-        pil_img = Image.frombytes(heif.mode, heif.size, heif.data, "raw")
+        heif = pillow_heif.open_heif(
+            path,
+            convert_hdr_to_8bit=True,
+            apply_transformations=True,
+        )
+        pil_img = heif.to_pillow() if hasattr(heif, "to_pillow") else Image.frombytes(
+            heif.mode, heif.size, heif.data, "raw"
+        )
         rgb = pil_img.convert("RGB")
     except Exception as exc:  # noqa: BLE001
         raise RuntimeError(

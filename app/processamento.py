@@ -739,8 +739,14 @@ def _decode_image_bytes(raw: bytes) -> np.ndarray:
         return img
     if _PILLOW_HEIF_OK:
         try:
-            heif = pillow_heif.read_heif(raw)
-            pil_img = Image.frombytes(heif.mode, heif.size, heif.data, "raw")
+            heif = pillow_heif.open_heif(
+                raw,
+                convert_hdr_to_8bit=True,
+                apply_transformations=True,
+            )
+            pil_img = heif.to_pillow() if hasattr(heif, "to_pillow") else Image.frombytes(
+                heif.mode, heif.size, heif.data, "raw"
+            )
             rgb = np.array(pil_img.convert("RGB"))
             bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
             return bgr
