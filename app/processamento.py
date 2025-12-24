@@ -114,13 +114,14 @@ def _aruco_detector():
 
 def _detect_markers(image_bgr: np.ndarray):
     det, dictn = _aruco_detector()
+    image_gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
     if isinstance(det, tuple):
         dictionary, params = det
         corners, ids, _ = cv2.aruco.detectMarkers(
-            image_bgr, dictionary, parameters=params
+            image_gray, dictionary, parameters=params
         )
     else:
-        corners, ids, _ = det.detectMarkers(image_bgr)
+        corners, ids, _ = det.detectMarkers(image_gray)
     if ids is None or len(ids) < 4:
         raise RuntimeError(
             "Não encontrei marcadores ArUco suficientes (precisa de 4)."
