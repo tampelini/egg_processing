@@ -790,6 +790,97 @@ def _ler_imagem_cv(imagem):
         return _ensure_landscape(img)
     raise TypeError("Tipo de entrada de imagem não suportado.")
 
+def _split_blob_watershed(binario: np.ndarray, ctr: np.ndarray) -> list:
+    """
+    Tenta separar um contorno colado (2 ovos viraram 1 blob) usando watershed
+    dentro da ROI do contorno.
+    Retorna uma lista de contornos (pode ser [ctr] se não conseguiu separar).
+    """
+    x, y, w, h = cv2.boundingRect(ctr)
+
+    # ROI com margem pra não cortar bordas
+    pad = 10
+    x0 = max(0, x - pad); y0 = max(0, y - pad)
+    x1 = min(binario.shape[1], x + w + pad)
+    y1 = min(binario.shape[0], y + h + pad)
+
+    roi = binario[y0:y1, x0:x1].copy()
+
+    # precisa ser branco=255 como foreground
+    fg = (roi > 0).astype(np.uint8) * 255
+    if fg.sum() < 500:  # muito pequeno
+        return [ctr]
+
+    # distancia -> picos no centro dos ovos
+    dist = cv2.distanceTransform(fg, cv2.DIST_L2, 5)
+    dist_norm = cv2.normalize(dist, None, 0, 1.0, cv2.NORM_MINMAX)
+
+    # "sure foreground" (sementes) — ajuste o 0.45–0.65 se precisar
+    sure_fg = (dist_norm > 0.55).astype(np.uint8) * 255
+
+    # se não houver sementes suficientes, não dá pra separar
+    n_lbl, markers = cv2.connectedComponents(sure_fg)
+    if n_lbl <= 2:
+        return [ctr]
+
+    # sure background
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    sure_bg = cv2.dilate(fg, kernel, iterations=2)
+
+    # unknown region
+    unknown = cv2.subtract(sure_bg, sure_fg)
+
+    # markers para watershed
+    markers = markers + 1
+    markers[unknown > 0] = 0
+
+    # watershed precisa de imagem 3 canais
+    color = cv2.cvtColor(roi, cv2.COLOR_GRAY2BGR)
+    markers = cv2.watershed(color, markers)
+
+    # cada label > 1 vira um objeto separado
+    out_contours = []
+    for label in range(2, markers.max() + 1):
+        mask = (markers == label).astype(np.uint8) * 255
+        cs, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for c in cs:
+            area = cv2.contourArea(c)
+            if area < 800:  # descarta lixo
+                continue
+            c[:, 0, 0] += x0
+            c[:, 0, 1] += y0
+            out_contours.append(c)
+
+    return out_contours if len(out_contours) >= 2 else [ctr]
+
+
+def _maybe_split_big_blobs(binario: np.ndarray, contornos: list) -> list:
+    """
+    Para contornos muito grandes (colados), tenta separar via watershed.
+    """
+    if not contornos:
+        return contornos
+
+    areas = np.array([cv2.contourArea(c) for c in contornos], dtype=np.float32)
+    med_area = float(np.median(areas)) if len(areas) else 0.0
+
+    out = []
+    for c in contornos:
+        a = float(cv2.contourArea(c))
+        x, y, w, h = cv2.boundingRect(c)
+
+        # critérios de "provável colado" — ajuste se quiser
+        too_big_area = (med_area > 0 and a > 1.7 * med_area)
+        too_tall = (med_area > 0 and h > 1.7 * np.median([cv2.boundingRect(k)[3] for k in contornos]))
+
+        if too_big_area or too_tall:
+            out.extend(_split_blob_watershed(binario, c))
+        else:
+            out.append(c)
+
+    return out
+
+
 # ---------------------------
 # Pipeline principal
 # ---------------------------
@@ -918,7 +1009,7 @@ def processar_imagem(
         )
     )
 
-    # --- limpeza morfológica (ordem importa!) ---
+       # --- limpeza morfológica (ordem importa!) ---
     # 1) OPEN remove pontinhos (ruído) sem destruir ovos
     kernel_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     binario = cv2.morphologyEx(binario, cv2.MORPH_OPEN, kernel_open, iterations=1)
@@ -930,6 +1021,7 @@ def processar_imagem(
     conts, _ = cv2.findContours(binario, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     areas = sorted([cv2.contourArea(c) for c in conts], reverse=True)[:5]
     print("blobs:", len(conts), "top_areas:", areas)
+
 
     # 9) Contornos e filtragem — robusto (sem mediana)
     contornos, _ = cv2.findContours(binario, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -960,7 +1052,7 @@ def processar_imagem(
         per = cv2.arcLength(ctr, True)
         circ = (4 * np.pi * area) / ((per * per) + 1e-6)  # 0..1 (quanto mais perto de 1, mais "redondo")
         print(circ)
-        if circ < 0.2:  # ajuste 0.15–0.30 (coloquei 0.2 para pegar o ovo do meio com menor circunferencia)
+        if circ < 0.02:  # ajuste 0.15–0.30 (coloquei 0.2 para pegar o ovo do meio com menor circunferencia)
             continue
 
         candidatos.append(((x, y, w, h), ctr, area))
@@ -993,6 +1085,8 @@ def processar_imagem(
 
     # dentro de cada linha, ordenar da esquerda para a direita
     for linha in linhas:
+        linha.sort(key=lambda it: it[0][0])
+
         linha.sort(key=lambda it: it[0][0])
 
     # 11) Conversão para RGB da BASE (origem da colorimetria)

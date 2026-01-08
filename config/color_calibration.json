@@ -20,7 +20,7 @@
     ]
   ],
   "meta": {
-    "image_used": "WhatsApp_Image_2026-01-05_at_21.24.21_1_a5c34c35.jpeg",
+    "image_used": "WhatsApp_Image_2026-01-05_at_21.24.21_1_24efa488.jpeg",
     "chart_layout": "12x2",
     "aruco_expected_ids": {
       "TL": 10,
@@ -28,7 +28,7 @@
       "BL": 12,
       "BR": 13
     },
-    "created_at": "2026-01-08T15:32:11",
+    "created_at": "2026-01-08T15:45:02",
     "warp_size": [
       800,
       1600
@@ -41,7 +41,7 @@
     ],
     "sample_win": 34,
     "ref_colors_csv": "C:\\Users\\tampe\\Desktop\\egg_processing\\config\\ref_colors.csv",
-    "measured_csv": "C:\\Users\\tampe\\Desktop\\egg_processing\\config\\measured_WhatsApp_Image_2026-01-05_at_21.24.21_1_a5c34c35.csv",
+    "measured_csv": "C:\\Users\\tampe\\Desktop\\egg_processing\\config\\measured_WhatsApp_Image_2026-01-05_at_21.24.21_1_24efa488.csv",
     "centers_source": "parametric_grid"
   }
 }
