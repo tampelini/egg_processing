@@ -1,26 +1,26 @@
 {
   "matrix_3x4": [
     [
-      1.0455082654953003,
+      1.3211966753005981,
       0.0,
       0.0,
-      18.804550170898438
+      -50.879150390625
     ],
     [
       0.0,
-      1.0704185962677002,
+      1.2201366424560547,
       0.0,
-      -10.720184326171875
+      -35.69253921508789
     ],
     [
       0.0,
       0.0,
-      0.9290679097175598,
-      -23.77316665649414
+      1.2785202264785767,
+      -59.824188232421875
     ]
   ],
   "meta": {
-    "image_used": "WhatsApp_Image_2026-01-05_at_21.24.21_21726b83.jpeg",
+    "image_used": "IMG_7252_b6e741c0.jpeg",
     "chart_layout": "12x2",
     "aruco_expected_ids": {
       "TL": 10,
@@ -28,7 +28,7 @@
       "BL": 12,
       "BR": 13
     },
-    "created_at": "2026-01-08T16:09:00",
+    "created_at": "2026-01-08T17:17:31",
     "warp_size": [
       800,
       1600
@@ -41,7 +41,7 @@
     ],
     "sample_win": 34,
     "ref_colors_csv": "C:\\Users\\tampe\\Desktop\\egg_processing\\config\\ref_colors.csv",
-    "measured_csv": "C:\\Users\\tampe\\Desktop\\egg_processing\\config\\measured_WhatsApp_Image_2026-01-05_at_21.24.21_21726b83.csv",
+    "measured_csv": "C:\\Users\\tampe\\Desktop\\egg_processing\\config\\measured_IMG_7252_b6e741c0.csv",
     "centers_source": "parametric_grid"
   }
 }
