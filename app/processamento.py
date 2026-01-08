@@ -927,11 +927,13 @@ def processar_imagem(
     else:
         paired = []
 
-    # 10) Agrupar em linhas
-    linhas, tolerancia_y = [], (median_h * 0.5 if median_h else 50)
+    # 10) Agrupar em linhas (tolerância adaptativa por ovo)
+    linhas = []
     for (x, y, w, h), ctr in sorted(paired, key=lambda it: it[0][1]):
+        tolerancia_y = max(40, int(h * 0.6))
         for linha in linhas:
-            if abs(linha[0][0][1] - y) < tolerancia_y:
+            y_ref = linha[0][0][1]
+            if abs(y_ref - y) < tolerancia_y:
                 linha.append(((x, y, w, h), ctr))
                 break
         else:
