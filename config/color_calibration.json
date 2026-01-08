@@ -1,26 +1,26 @@
 {
   "matrix_3x4": [
     [
-      1.044345498085022,
+      1.0341262817382812,
       0.0,
       0.0,
-      -19.253097534179688
+      23.056947708129883
     ],
     [
       0.0,
-      1.5323237180709839,
+      1.067952036857605,
       0.0,
-      -124.5590591430664
+      -10.515371322631836
     ],
     [
       0.0,
       0.0,
-      0.9014408588409424,
-      -20.348703384399414
+      0.9338070750236511,
+      -25.718225479125977
     ]
   ],
   "meta": {
-    "image_used": "Imagem_do_WhatsApp_de_2025-11-10_as_21.33.31_e1677a70_f1f502a7.jpg",
+    "image_used": "WhatsApp_Image_2026-01-05_at_21.24.21_1_a5c34c35.jpeg",
     "chart_layout": "12x2",
     "aruco_expected_ids": {
       "TL": 10,
@@ -28,7 +28,7 @@
       "BL": 12,
       "BR": 13
     },
-    "created_at": "2025-11-10T21:52:08",
+    "created_at": "2026-01-08T15:32:11",
     "warp_size": [
       800,
       1600
@@ -40,8 +40,8 @@
       0.02
     ],
     "sample_win": 34,
-    "ref_colors_csv": "C:\\Users\\tampe\\PycharmProjects\\egg_processing\\config\\ref_colors.csv",
-    "measured_csv": "C:\\Users\\tampe\\PycharmProjects\\egg_processing\\config\\measured_Imagem_do_WhatsApp_de_2025-11-10_as_21.33.31_e1677a70_f1f502a7.csv",
+    "ref_colors_csv": "C:\\Users\\tampe\\Desktop\\egg_processing\\config\\ref_colors.csv",
+    "measured_csv": "C:\\Users\\tampe\\Desktop\\egg_processing\\config\\measured_WhatsApp_Image_2026-01-05_at_21.24.21_1_a5c34c35.csv",
     "centers_source": "parametric_grid"
   }
 }
