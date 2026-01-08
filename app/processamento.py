@@ -1015,7 +1015,7 @@ def processar_imagem(
     binario = cv2.morphologyEx(binario, cv2.MORPH_OPEN, kernel_open, iterations=1)
 
     # 2) CLOSE fecha buracos / rachaduras no ovo
-    kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     binario = cv2.morphologyEx(binario, cv2.MORPH_CLOSE, kernel_close, iterations=1)
 
     conts, _ = cv2.findContours(binario, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
