@@ -959,7 +959,8 @@ def processar_imagem(
         # circularidade: remove rabiscos/contornos muito irregulares
         per = cv2.arcLength(ctr, True)
         circ = (4 * np.pi * area) / ((per * per) + 1e-6)  # 0..1 (quanto mais perto de 1, mais "redondo")
-        if circ < 0.16:  # ajuste 0.15–0.30
+        print(circ)
+        if circ < 0.2:  # ajuste 0.15–0.30 (coloquei 0.2 para pegar o ovo do meio com menor circunferencia)
             continue
 
         candidatos.append(((x, y, w, h), ctr, area))
