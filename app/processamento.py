@@ -901,43 +901,96 @@ def processar_imagem(
     cl = clahe.apply(l)
     imagem_trabalho = cv2.cvtColor(cv2.merge((cl, a, b)), cv2.COLOR_LAB2BGR)
 
-    # 8) Segmentação (na cópia de trabalho)
+    # 8) Segmentação (na cópia de trabalho) — mais estável e com limpeza
     cinza = cv2.cvtColor(imagem_trabalho, cv2.COLOR_BGR2GRAY)
-    cinza = cv2.GaussianBlur(cinza, (5, 5), 0)
+
+    # um blur um pouco mais forte ajuda a matar textura/ruído
+    cinza = cv2.GaussianBlur(cinza, (9, 9), 0)
+
+    # adaptiveThreshold com janela maior (11 é pequeno demais e gera "granulado")
     binario = cv2.bitwise_not(
         cv2.adaptiveThreshold(
-            cinza, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY, 11, 2
+            cinza, 255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            31,  # ↑ maior: 21, 31, 41
+            9  # ↑ maior: 3, 5, 7
         )
     )
 
-    # 9) Contornos e filtragem
+    # --- limpeza morfológica (ordem importa!) ---
+    # 1) OPEN remove pontinhos (ruído) sem destruir ovos
+    kernel_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    binario = cv2.morphologyEx(binario, cv2.MORPH_OPEN, kernel_open, iterations=1)
+
+    # 2) CLOSE fecha buracos / rachaduras no ovo
+    kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    binario = cv2.morphologyEx(binario, cv2.MORPH_CLOSE, kernel_close, iterations=1)
+
+    conts, _ = cv2.findContours(binario, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    areas = sorted([cv2.contourArea(c) for c in conts], reverse=True)[:5]
+    print("blobs:", len(conts), "top_areas:", areas)
+
+    # 9) Contornos e filtragem — robusto (sem mediana)
     contornos, _ = cv2.findContours(binario, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contornos = [ctr for ctr in contornos if 200 < cv2.contourArea(ctr) < 50000]
 
-    boxes = [cv2.boundingRect(ctr) for ctr in contornos]
-    median_w = float(np.median([w for _, _, w, _ in boxes])) if boxes else 0.0
-    median_h = float(np.median([h for _, _, _, h in boxes])) if boxes else 0.0
-    if median_w and median_h:
-        paired = [
-            (b, c) for b, c in zip(boxes, contornos)
-            if abs(b[2] - median_w) / (median_w + 1e-6) < 0.5
-            and abs(b[3] - median_h) / (median_h + 1e-6) < 0.5
-        ]
-    else:
-        paired = []
+    H, W = binario.shape[:2]
+    area_min = 2200  # ajuste fino conforme seu setup
+    area_max = int((W * H) * 0.20)  # evita pegar "fundo inteiro"
 
-    # 10) Agrupar em linhas (tolerância adaptativa por ovo)
+    candidatos = []
+
+    for ctr in contornos:
+        area = cv2.contourArea(ctr)
+        if area < area_min or area > area_max:
+            continue
+
+        x, y, w, h = cv2.boundingRect(ctr)
+
+        # descarta coisas muito pequenas
+        if w < 40 or h < 40:
+            continue
+
+        # ovos normalmente não são extremamente finos/esticados
+        aspect = w / (h + 1e-6)
+        if aspect < 0.45 or aspect > 2.2:
+            continue
+
+        # circularidade: remove rabiscos/contornos muito irregulares
+        per = cv2.arcLength(ctr, True)
+        circ = (4 * np.pi * area) / ((per * per) + 1e-6)  # 0..1 (quanto mais perto de 1, mais "redondo")
+        if circ < 0.16:  # ajuste 0.15–0.30
+            continue
+
+        candidatos.append(((x, y, w, h), ctr, area))
+
+    # ordena por área (maiores primeiro) e limita (pra não pegar sujeira)
+    candidatos.sort(key=lambda it: it[2], reverse=True)
+
+    TOP_N = 40  # se você tem ~15-25 ovos, deixe 30-60
+    paired = [(b, c) for (b, c, _) in candidatos[:TOP_N]]
+
+    # 10) Agrupar em linhas (sem median_h, tolerância adaptativa)
     linhas = []
+
+    # ordena por Y (de cima para baixo)
     for (x, y, w, h), ctr in sorted(paired, key=lambda it: it[0][1]):
-        tolerancia_y = max(40, int(h * 0.6))
+
+        # tolerância vertical baseada no próprio ovo
+        # evita depender de estatística global frágil
+        tolerancia_y = max(40, int(h * 0.6))  # ajuste fino: 0.5–0.7
+
         for linha in linhas:
+            # compara com o Y do primeiro elemento da linha
             y_ref = linha[0][0][1]
             if abs(y_ref - y) < tolerancia_y:
                 linha.append(((x, y, w, h), ctr))
                 break
         else:
+            # cria nova linha
             linhas.append([((x, y, w, h), ctr)])
+
+    # dentro de cada linha, ordenar da esquerda para a direita
     for linha in linhas:
         linha.sort(key=lambda it: it[0][0])
 
