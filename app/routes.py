@@ -1,7 +1,9 @@
 # app/routes.py
+import csv
 import json
 import logging
 import os
+import subprocess
 import uuid
 from flask import Blueprint, render_template, request
 from werkzeug.utils import secure_filename
@@ -38,6 +40,51 @@ DEFAULT_AJUSTES = {
     "fator_nitidez": 0.0,
     "fator_temperatura": 0.0,
 }
+
+def _get_git_commit_info():
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", PROJECT_ROOT, "log", "-1", "--format=%H|%cs"],
+            text=True,
+        ).strip()
+    except Exception:  # noqa: BLE001
+        return None
+
+    if not out:
+        return None
+
+    commit_hash, commit_date = out.split("|", 1)
+    return {
+        "hash": commit_hash,
+        "short": commit_hash[:7],
+        "date": commit_date,
+    }
+
+def _load_ref_colors_rows():
+    path = os.path.join(CONFIG_DIR, "ref_colors.csv")
+    if not os.path.exists(path):
+        return []
+    with open(path, "r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        rows = []
+        for row in reader:
+            rows.append(
+                {
+                    "label": row.get("label", ""),
+                    "row": row.get("row", ""),
+                    "col": row.get("col", ""),
+                    "R": row.get("R", ""),
+                    "G": row.get("G", ""),
+                    "B": row.get("B", ""),
+                }
+            )
+        return rows
+
+def _default_ref_colors_rows():
+    rows = _load_ref_colors_rows()
+    if rows:
+        return rows
+    return [{"label": "", "row": "", "col": "", "R": "", "G": "", "B": ""}]
 
 
 def _convert_heic_if_needed(path: str) -> str:
@@ -126,6 +173,7 @@ def index():
     ovos_info = None
     ajustes = DEFAULT_AJUSTES.copy()
     error_message = None
+    ref_colors_status = None
 
     auto_calibration = None
 
@@ -174,6 +222,9 @@ def index():
                     ajustes=ajustes,
                     auto_calibration=auto_calibration,
                     error_message=error_message,
+                    ref_colors_status=ref_colors_status,
+                    ref_colors_rows=_default_ref_colors_rows(),
+                    commit_info=_get_git_commit_info(),
                     img_url=None, ann_url=None, warp_url=None,
                     warp_debug_url=None, warp_labels_url=None,
                     calibrated_url=None, cfg=None, cfg_path=None,
@@ -228,6 +279,9 @@ def index():
         ajustes=ajustes,
         auto_calibration=auto_calibration,
         error_message=error_message,
+        ref_colors_status=ref_colors_status,
+        ref_colors_rows=_default_ref_colors_rows(),
+        commit_info=_get_git_commit_info(),
         # calibração (vazio por padrão)
         img_url=None, ann_url=None, warp_url=None,
         warp_debug_url=None, warp_labels_url=None,
@@ -253,6 +307,9 @@ def calibrar():
             imagem=None,
             ovos_info=None,
             error_message=None,
+            ref_colors_status=None,
+            ref_colors_rows=_default_ref_colors_rows(),
+            commit_info=_get_git_commit_info(),
             calib_exists=has_saved_calibration(CONFIG_DIR),
             img_url=None, ann_url=None, warp_url=None,
             warp_debug_url=None, warp_labels_url=None,
@@ -274,6 +331,9 @@ def calibrar():
             imagem=None,
             ovos_info=None,
             error_message=str(exc),
+            ref_colors_status=None,
+            ref_colors_rows=_default_ref_colors_rows(),
+            commit_info=_get_git_commit_info(),
             calib_exists=has_saved_calibration(CONFIG_DIR),
             img_url=None, ann_url=None, warp_url=None,
             warp_debug_url=None, warp_labels_url=None,
@@ -321,6 +381,9 @@ def calibrar():
         "ajustes": DEFAULT_AJUSTES.copy(),
         "auto_calibration": None,
         "error_message": None,
+        "ref_colors_status": None,
+        "ref_colors_rows": _default_ref_colors_rows(),
+        "commit_info": _get_git_commit_info(),
         "calib_exists": have_saved,
     }
 
@@ -361,3 +424,88 @@ def calibrar():
         context["cfg_path"] = "Erro durante a calibração"
 
     return render_template('index.html', **context)
+
+@bp.route('/ref-colors', methods=['POST'])
+def update_ref_colors():
+    upload = request.files.get("ref_colors_file")
+    table_labels = request.form.getlist("color_label")
+    table_rows = request.form.getlist("color_row")
+    table_cols = request.form.getlist("color_col")
+    table_rs = request.form.getlist("color_r")
+    table_gs = request.form.getlist("color_g")
+    table_bs = request.form.getlist("color_b")
+    ref_colors_status = None
+
+    content = ""
+    using_table = any(
+        [
+            table_labels,
+            table_rows,
+            table_cols,
+            table_rs,
+            table_gs,
+            table_bs,
+        ]
+    )
+    if using_table:
+        rows = []
+        max_len = max(
+            len(table_labels),
+            len(table_rows),
+            len(table_cols),
+            len(table_rs),
+            len(table_gs),
+            len(table_bs),
+        )
+        for idx in range(max_len):
+            label = (table_labels[idx] if idx < len(table_labels) else "").strip()
+            row = (table_rows[idx] if idx < len(table_rows) else "").strip()
+            col = (table_cols[idx] if idx < len(table_cols) else "").strip()
+            r = (table_rs[idx] if idx < len(table_rs) else "").strip()
+            g = (table_gs[idx] if idx < len(table_gs) else "").strip()
+            b = (table_bs[idx] if idx < len(table_bs) else "").strip()
+            if not any([label, row, col, r, g, b]):
+                continue
+            rows.append(
+                {
+                    "label": label,
+                    "row": row,
+                    "col": col,
+                    "R": r,
+                    "G": g,
+                    "B": b,
+                }
+            )
+        if rows:
+            output_lines = ["label,row,col,R,G,B"]
+            for row in rows:
+                output_lines.append(
+                    "{label},{row},{col},{R},{G},{B}".format(**row)
+                )
+            content = "\n".join(output_lines)
+    elif upload and upload.filename:
+        content = upload.read().decode("utf-8", errors="replace").strip()
+
+    if not content:
+        ref_colors_status = "Informe um CSV válido ou envie um arquivo para atualizar a paleta."
+    else:
+        path = os.path.join(CONFIG_DIR, "ref_colors.csv")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(content.rstrip() + "\n")
+        ref_colors_status = "Arquivo ref_colors.csv atualizado com sucesso."
+
+    return render_template(
+        'index.html',
+        imagem=None,
+        ovos_info=None,
+        ajustes=DEFAULT_AJUSTES.copy(),
+        auto_calibration=None,
+        error_message=None,
+        ref_colors_status=ref_colors_status,
+        ref_colors_rows=_default_ref_colors_rows(),
+        commit_info=_get_git_commit_info(),
+        img_url=None, ann_url=None, warp_url=None,
+        warp_debug_url=None, warp_labels_url=None,
+        calibrated_url=None, cfg=None, cfg_path=None,
+        calib_exists=has_saved_calibration(CONFIG_DIR),
+    )
