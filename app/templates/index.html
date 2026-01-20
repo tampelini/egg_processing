@@ -44,6 +44,44 @@
     .claridade-box {
       margin-top: 10px;
     }
+    .ref-colors-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    .ref-colors-table th,
+    .ref-colors-table td {
+      border-bottom: 1px solid #3a3a3a;
+      padding: 6px 8px;
+      text-align: left;
+    }
+    .ref-colors-table th {
+      color: #bdbdbd;
+      font-weight: 600;
+    }
+    .ref-colors-table input {
+      width: 100%;
+      background: #1e1e1e;
+      border: 1px solid #3a3a3a;
+      border-radius: 6px;
+      padding: 6px;
+      color: #f0f0f0;
+      font-family: "SFMono-Regular", "JetBrains Mono", Consolas, monospace;
+    }
+    .ref-colors-table .cell-small {
+      max-width: 70px;
+    }
+    .ref-colors-table .cell-medium {
+      max-width: 90px;
+    }
+    .commit-meta {
+      margin-top: 20px;
+      color: #bdbdbd;
+      font-size: 0.85rem;
+    }
+    .commit-meta code {
+      color: #f0f0f0;
+    }
   </style>
 </head>
 <body>
@@ -308,7 +346,56 @@
       </div>
     </section>
 
+    <!-- OPÇÃO 3: EDITAR REF_COLORS -->
+    <section class="section">
+      <h2>3) Atualizar paleta base (ref_colors.csv)</h2>
+      <p class="hint">Preencha a tabela com os valores da paleta ou envie um arquivo CSV atualizado.</p>
+
+      <form action="{{ url_for('routes.update_ref_colors') }}" method="post" enctype="multipart/form-data">
+        <label for="ref-colors-file" class="file-label">Enviar novo ref_colors.csv</label>
+        <input id="ref-colors-file" type="file" name="ref_colors_file" accept=".csv" />
+
+        <div class="divider"></div>
+        <table class="ref-colors-table">
+          <thead>
+            <tr>
+              <th>label</th>
+              <th>row</th>
+              <th>col</th>
+              <th>R</th>
+              <th>G</th>
+              <th>B</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in ref_colors_rows %}
+              <tr>
+                <td><input type="text" name="color_label" value="{{ row.label }}" /></td>
+                <td class="cell-small"><input type="number" name="color_row" value="{{ row.row }}" /></td>
+                <td class="cell-small"><input type="number" name="color_col" value="{{ row.col }}" /></td>
+                <td class="cell-medium"><input type="number" name="color_r" value="{{ row.R }}" /></td>
+                <td class="cell-medium"><input type="number" name="color_g" value="{{ row.G }}" /></td>
+                <td class="cell-medium"><input type="number" name="color_b" value="{{ row.B }}" /></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <button type="submit">Salvar paleta</button>
+      </form>
+
+      {% if ref_colors_status %}
+        <p class="hint">{{ ref_colors_status }}</p>
+      {% endif %}
+    </section>
+
   </div>
+
+  {% if commit_info %}
+    <div class="commit-meta">
+      Commit: <code>{{ commit_info.short }}</code> — {{ commit_info.date }}
+    </div>
+  {% endif %}
   <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>
