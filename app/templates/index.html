@@ -105,7 +105,7 @@
 
         <div class="ajustes-box">
           <h3>Ajustes de imagem</h3>
-          <p class="ajustes-hint">Valores com 1.00 mantêm o padrão (exceto EV/nitidez = 0.00).</p>
+          <p class="ajustes-hint">Valores com 1.00 mantêm o padrão (exceto EV/nitidez/matiz = 0.00).</p>
           <div class="ajustes-grid">
             <div class="ajuste">
               <div class="ajuste-head">
@@ -154,6 +154,14 @@
               </div>
               <input id="ajuste-temperatura" type="number" step="0.001" min="-1.000" max="1.000" name="fator_temperatura" value="{{ '%.3f' % ajustes.fator_temperatura }}" data-decimals="3" />
               <small>&gt;0 aquece (mais vermelho), &lt;0 esfria (mais azul).</small>
+            </div>
+            <div class="ajuste">
+              <div class="ajuste-head">
+                <label for="ajuste-matiz-vermelho">Matiz do vermelho (manual)</label>
+                <span class="ajuste-value" data-value-for="ajuste-matiz-vermelho">{{ '%.1f' % ajustes.fator_matiz_vermelho }}</span>
+              </div>
+              <input id="ajuste-matiz-vermelho" type="range" step="1" min="-30" max="30" name="fator_matiz_vermelho" value="{{ '%.1f' % ajustes.fator_matiz_vermelho }}" data-decimals="1" />
+              <small>Desloca apenas tons vermelhos no HSV (negativo puxa para magenta, positivo para laranja).</small>
             </div>
           </div>
         </div>
@@ -336,6 +344,9 @@
       </form>
 
       <div class="result">
+        {% if calibration_status %}
+          <p class="info">{{ calibration_status }}</p>
+        {% endif %}
         {% if img_url %}<h3>Imagem enviada</h3><img src="{{ img_url }}" />{% endif %}
         {% if ann_url %}<h3>Detecção ArUco</h3><img src="{{ ann_url }}" />{% endif %}
         {% if warp_url %}<h3>Warp da paleta</h3><img src="{{ warp_url }}" />{% endif %}
@@ -343,6 +354,18 @@
         {% if warp_labels_url %}<h3>Warp (labels)</h3><img src="{{ warp_labels_url }}" />{% endif %}
         {% if calibrated_url %}<h3>Imagem calibrada</h3><img src="{{ calibrated_url }}" />{% endif %}
         {% if cfg %}<div class="divider"></div><h3>Configuração</h3><pre>{{ cfg | tojson(indent=2) }}</pre>{% endif %}
+
+        {% if img_url and not ann_url and not warp_url and not calibrated_url %}
+          <div class="divider"></div>
+          <h3>Checklist quando as imagens de calibração não aparecem</h3>
+          <ul>
+            <li>Marque <strong>Ignorar calibração existente</strong> para forçar a geração da detecção e do warp.</li>
+            <li>Garanta que os 4 ArUco estejam totalmente visíveis e nítidos na foto.</li>
+            <li>Evite reflexo na paleta e prefira iluminação uniforme (sem sombra dura).</li>
+            <li>Verifique se os IDs da sua paleta são 10, 11, 12 e 13 nos cantos esperados.</li>
+            <li>Se necessário, use <strong>Apagar calibrações anteriores</strong> e calibre novamente.</li>
+          </ul>
+        {% endif %}
       </div>
     </section>
 

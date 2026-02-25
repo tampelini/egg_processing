@@ -640,6 +640,29 @@ def ajustar_temperatura(img_bgr: np.ndarray, intensidade: float = 0.0) -> np.nda
     return np.clip(img, 0, 255).astype(np.uint8)
 
 
+def ajustar_matiz_vermelho(img_bgr: np.ndarray, delta: float = 0.0) -> np.ndarray:
+    """Ajusta a matiz apenas de tons vermelhos no HSV.
+
+    ``delta`` é aplicado no canal H (OpenCV 0..179). Valores positivos
+    deslocam vermelho para tons mais quentes (alaranjados) e negativos
+    puxam para magenta.
+    """
+    delta = float(delta)
+    if abs(delta) < 1e-6:
+        return img_bgr
+
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+    h = hsv[:, :, 0].astype(np.int16)
+
+    # Vermelhos no OpenCV ficam perto de 0 e 179.
+    red_mask = (h <= 15) | (h >= 165)
+    shifted = (h[red_mask] + int(round(delta))) % 180
+    h[red_mask] = shifted
+
+    hsv[:, :, 0] = h.astype(np.uint8)
+    return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+
+
 def cortar_bordas_proporcional(imagem_cv, proporcao=0.03):
     """Corta bordas proporcionalmente à resolução (para remover ruído nas extremidades)."""
     h, w = imagem_cv.shape[:2]
@@ -897,6 +920,7 @@ def processar_imagem(
     ev_exposicao: float = 0.0,
     fator_nitidez: float = 0.0,
     fator_temperatura: float = 0.0,
+    fator_matiz_vermelho: float = 0.0,
     *,
     auto_calibrar: bool = True,
     config_dir: Optional[str] = None,
@@ -979,6 +1003,8 @@ def processar_imagem(
         imagem_base = ajustar_saturacao(imagem_base, fator=float(fator_saturacao))
     if abs(float(fator_temperatura)) > 1e-6:
         imagem_base = ajustar_temperatura(imagem_base, intensidade=float(fator_temperatura))
+    if abs(float(fator_matiz_vermelho)) > 1e-6:
+        imagem_base = ajustar_matiz_vermelho(imagem_base, delta=float(fator_matiz_vermelho))
     if abs(float(fator_nitidez)) > 1e-6:
         imagem_base = ajustar_nitidez(imagem_base, intensidade=float(fator_nitidez))
 
@@ -1219,6 +1245,7 @@ def processar_imagem_por_url(
     ev_exposicao: float = 0.0,
     fator_nitidez: float = 0.0,
     fator_temperatura: float = 0.0,
+    fator_matiz_vermelho: float = 0.0,
     *,
     auto_calibrar: bool = True,
     config_dir: Optional[str] = None,
@@ -1241,6 +1268,7 @@ def processar_imagem_por_url(
         ev_exposicao=ev_exposicao,
         fator_nitidez=fator_nitidez,
         fator_temperatura=fator_temperatura,
+        fator_matiz_vermelho=fator_matiz_vermelho,
         auto_calibrar=auto_calibrar,
         config_dir=config_dir,
         static_dir=static_dir,
