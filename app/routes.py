@@ -373,6 +373,7 @@ def calibrar():
         "warp_debug_url": None,
         "warp_labels_url": None,
         "calibrated_url": None,
+        "calibration_status": None,
         "cfg": None,
         "cfg_path": None,
         # resultados de processamento desligados nesta renderização
@@ -394,6 +395,10 @@ def calibrar():
             out_img = os.path.join(CALIBRATED_DIR, f"calibrated_{name_wo}.jpg")
             apply_saved_calibration(upload_path, CONFIG_DIR, out_img)
             context["calibrated_url"] = _to_url(out_img)
+            context["calibration_status"] = (
+                "Calibração existente aplicada com sucesso. "
+                "Marque 'Ignorar calibração existente' para recalibrar com esta imagem."
+            )
         else:
             # constrói calibração a partir desta imagem
             out = build_calibration_from_image(upload_path, CONFIG_DIR, STATIC_DIR, CALIBRATED_DIR)
@@ -412,6 +417,18 @@ def calibrar():
             if out.get("calibrated_name"):
                 context["calibrated_url"] = _to_url(os.path.join(CALIBRATED_DIR, out["calibrated_name"]))
 
+            if out.get("palette_detected"):
+                context["calibration_status"] = (
+                    "Paleta detectada e calibração concluída. "
+                    "Confira os painéis de detecção/warp para validar o alinhamento."
+                )
+            else:
+                skip_reason = out.get("skip_reason") or "motivo não informado"
+                context["calibration_status"] = (
+                    "A calibração não avançou para a amostragem porque a paleta não foi detectada. "
+                    f"Motivo: {skip_reason}."
+                )
+
         # carrega JSON de calibração (se houver)
         colors_json_path = os.path.join(CONFIG_DIR, "color_calibration.json")
         if os.path.exists(colors_json_path):
@@ -420,6 +437,9 @@ def calibrar():
                 context["cfg_path"] = "config/color_calibration.json"
 
     except Exception as e:
+        context["calibration_status"] = (
+            "Falha ao calibrar. Revise a imagem enviada e os arquivos de referência."
+        )
         context["cfg"] = {"error": str(e)}
         context["cfg_path"] = "Erro durante a calibração"
 

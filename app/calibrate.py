@@ -84,16 +84,32 @@ def _aruco_detector():
         params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
         return (dictionary, params), dictionary
 
+def _preprocess_for_palette_detection(image_bgr: np.ndarray) -> np.ndarray:
+    """Cria cópia nítida da imagem apenas para melhorar a detecção da paleta."""
+    detection_img = image_bgr.copy()
+    blurred = cv2.GaussianBlur(detection_img, (0, 0), 1.2)
+    sharpened = cv2.addWeighted(detection_img, 1.7, blurred, -0.7, 0)
+    return sharpened
+
+
 def _detect_markers(image_bgr):
-    det, dictn = _aruco_detector()
-    if isinstance(det, tuple):
-        dictionary, params = det
-        corners, ids, _ = cv2.aruco.detectMarkers(image_bgr, dictionary, parameters=params)
-    else:
-        corners, ids, _ = det.detectMarkers(image_bgr)
-    if ids is None or len(ids) < 4:
-        raise RuntimeError("Não encontrei marcadores ArUco suficientes (precisa de 4).")
-    return corners, ids.flatten().tolist()
+    det, _ = _aruco_detector()
+
+    # Tentativa 1: imagem pré-processada (mais nítida) só para detectar ArUco.
+    # Tentativa 2: fallback para a imagem original.
+    attempts = (_preprocess_for_palette_detection(image_bgr), image_bgr)
+
+    for attempt in attempts:
+        if isinstance(det, tuple):
+            dictionary, params = det
+            corners, ids, _ = cv2.aruco.detectMarkers(attempt, dictionary, parameters=params)
+        else:
+            corners, ids, _ = det.detectMarkers(attempt)
+
+        if ids is not None and len(ids) >= 4:
+            return corners, ids.flatten().tolist()
+
+    raise RuntimeError("Não encontrei marcadores ArUco suficientes (precisa de 4).")
 
 def _order_corners_by_expected(corners, ids: List[int]) -> np.ndarray:
     id_to_corner = {idv: c.reshape(-1, 2) for c, idv in zip(corners, ids)}
