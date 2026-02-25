@@ -126,6 +126,11 @@ label { display: flex; gap: 8px; align-items: flex-start; }
   font-size: 0.8rem;
 }
 
+.ajuste input[type=range] {
+  width: 100%;
+  accent-color: var(--primary);
+}
+
 button {
   background: var(--primary);
   color: #fff;

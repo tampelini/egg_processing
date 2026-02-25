@@ -39,6 +39,7 @@ DEFAULT_AJUSTES = {
     "ev_exposicao": 0.0,
     "fator_nitidez": 0.0,
     "fator_temperatura": 0.0,
+    "fator_matiz_vermelho": 0.0,
 }
 
 def _get_git_commit_info():
@@ -199,6 +200,7 @@ def index():
             ev_exposicao = _parse_float('ev_exposicao', 0.0, -5.0, 5.0)
             fator_nitidez = _parse_float('fator_nitidez', 0.0, -1.0, 2.0)
             fator_temperatura = _parse_float('fator_temperatura', 0.0, -1.0, 1.0)
+            fator_matiz_vermelho = _parse_float('fator_matiz_vermelho', 0.0, -30.0, 30.0)
 
             filename = secure_filename(file.filename)
             name_wo, ext = os.path.splitext(filename)
@@ -242,6 +244,7 @@ def index():
                     ev_exposicao=ev_exposicao,
                     fator_nitidez=fator_nitidez,
                     fator_temperatura=fator_temperatura,
+                    fator_matiz_vermelho=fator_matiz_vermelho,
                     auto_calibrar=True,
                     config_dir=CONFIG_DIR,
                     static_dir=STATIC_DIR,
