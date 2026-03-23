@@ -40,6 +40,7 @@ DEFAULT_AJUSTES = {
     "fator_nitidez": 0.0,
     "fator_temperatura": 0.0,
     "fator_matiz_vermelho": 0.0,
+    "raio_elipse_media": 0.85,
 }
 
 def _get_git_commit_info():
@@ -201,6 +202,7 @@ def index():
             fator_nitidez = _parse_float('fator_nitidez', 0.0, -1.0, 2.0)
             fator_temperatura = _parse_float('fator_temperatura', 0.0, -1.0, 1.0)
             fator_matiz_vermelho = _parse_float('fator_matiz_vermelho', 0.0, -30.0, 30.0)
+            raio_elipse_media = _parse_float('raio_elipse_media', 0.85, 0.10, 1.50)
 
             filename = secure_filename(file.filename)
             name_wo, ext = os.path.splitext(filename)
@@ -236,7 +238,7 @@ def index():
             try:
                 imagem_b64, ovos_info, auto_calibration = processar_imagem(
                     upload_path,
-                    fator_elipse=(0.85, 0.75),
+                    fator_elipse=(raio_elipse_media, raio_elipse_media),
                     usar_fitellipse=True,
                     fator_v_backup=fator_v_backup,
                     fator_contraste=fator_contraste,
