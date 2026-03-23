@@ -163,6 +163,14 @@
               <input id="ajuste-matiz-vermelho" type="range" step="1" min="-30" max="30" name="fator_matiz_vermelho" value="{{ '%.1f' % ajustes.fator_matiz_vermelho }}" data-decimals="1" />
               <small>Desloca apenas tons vermelhos no HSV (negativo puxa para magenta, positivo para laranja).</small>
             </div>
+            <div class="ajuste">
+              <div class="ajuste-head">
+                <label for="ajuste-raio-elipse">Raio da elipse da média</label>
+                <span class="ajuste-value" data-value-for="ajuste-raio-elipse">{{ '%.2f' % ajustes.raio_elipse_media }}</span>
+              </div>
+              <input id="ajuste-raio-elipse" type="number" step="0.01" min="0.10" max="1.50" name="raio_elipse_media" value="{{ '%.2f' % ajustes.raio_elipse_media }}" data-decimals="2" />
+              <small>Controla o raio usado na máscara elíptica para calcular a média da cor.</small>
+            </div>
           </div>
         </div>
 
